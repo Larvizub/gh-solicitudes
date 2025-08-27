@@ -14,11 +14,19 @@ import { ref, update } from 'firebase/database';
 const msProvider = new OAuthProvider('microsoft.com');
 // Parámetros de entorno para Microsoft
 const tenantId = import.meta.env.VITE_TENANT_ID;
+// Si se define VITE_MS_ALLOW_ANY=true, usamos el endpoint 'common' para aceptar
+// cuentas de cualquier directorio y cuentas Microsoft personales (MSA).
+const allowAnyMs = import.meta.env.VITE_MS_ALLOW_ANY === 'true';
 msProvider.addScope('user.read');
-msProvider.setCustomParameters({
-  prompt: 'select_account',
-  tenant: tenantId,
-});
+const msProviderParams = { prompt: 'select_account' };
+if (allowAnyMs) {
+  // 'common' permite cuentas de cualquier tenant y cuentas personales
+  msProviderParams.tenant = 'common';
+} else if (tenantId) {
+  // Si se proporcionó un tenant específico en las env, lo respetamos
+  msProviderParams.tenant = tenantId;
+}
+msProvider.setCustomParameters(msProviderParams);
 
 export default function Login() {
   const navigate = useNavigate();
