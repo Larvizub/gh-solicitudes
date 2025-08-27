@@ -1,0 +1,267 @@
+
+import React, { useEffect, useState } from 'react';
+import {
+  Box,
+  Typography,
+  IconButton,
+  TextField,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
+  MenuItem,
+  Paper,
+} from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
+import { DataGrid } from '@mui/x-data-grid';
+import { ref, get, set, remove, update, push } from 'firebase/database';
+import { useAuth } from '../context/useAuth';
+import { useDb } from '../context/DbContext';
+import { getDbForRecinto } from '../firebase/multiDb';
+
+export default function Usuarios() {
+  const { userData } = useAuth();
+  const { db: ctxDb, recinto } = useDb();
+  const [usuarios, setUsuarios] = useState([]);
+  const [departamentos, setDepartamentos] = useState([]);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({ nombre: '', apellido: '', email: '', departamento: '', rol: 'estandar' });
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // Cargar usuarios y departamentos
+  useEffect(() => {
+    const fetchData = async () => {
+  // Usuarios
+  const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+  const snap = await get(ref(dbToUse, 'usuarios'));
+      if (snap.exists()) {
+        const data = snap.val();
+        setUsuarios(Object.entries(data).map(([id, u]) => ({ id, ...u })));
+      } else {
+        setUsuarios([]);
+      }
+      // Departamentos
+  const depSnap = await get(ref(dbToUse, 'departamentos'));
+      if (depSnap.exists()) {
+        const data = depSnap.val();
+        setDepartamentos(Object.values(data));
+      } else {
+        setDepartamentos([]);
+      }
+    };
+    fetchData();
+  }, [success, ctxDb, recinto]);
+
+  // Abrir diálogo para agregar/editar
+  const handleOpenDialog = (usuario = null) => {
+    setError('');
+    setSuccess('');
+    if (usuario) {
+      setEditId(usuario.id);
+      setForm({
+        nombre: usuario.nombre || '',
+        apellido: usuario.apellido || '',
+        email: usuario.email || '',
+        departamento: usuario.departamento || '',
+        rol: usuario.rol || 'estandar',
+      });
+    } else {
+      setEditId(null);
+      setForm({ nombre: '', apellido: '', email: '', departamento: '', rol: 'estandar' });
+    }
+    setOpenDialog(true);
+  };
+
+  // Guardar usuario (crear o editar)
+  const handleSave = async () => {
+    if (!form.nombre.trim() || !form.apellido.trim() || !form.email.trim() || !form.departamento.trim()) {
+      setError('Todos los campos son obligatorios');
+      return;
+    }
+    try {
+      if (editId) {
+  const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+  await update(ref(dbToUse, `usuarios/${editId}`), form);
+        setSuccess('Usuario actualizado');
+      } else {
+        // Solo admins pueden crear usuarios desde aquí
+  const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+  const newRef = push(ref(dbToUse, 'usuarios'));
+  await set(newRef, form);
+        setSuccess('Usuario agregado');
+      }
+      setOpenDialog(false);
+    } catch {
+      setError('Error al guardar');
+    }
+  };
+
+  // Eliminar usuario
+  const handleDelete = async (id) => {
+    try {
+  const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+  await remove(ref(dbToUse, `usuarios/${id}`));
+      setSuccess('Usuario eliminado');
+    } catch {
+      setError('Error al eliminar');
+    }
+  };
+
+  // Columnas para DataGrid
+  const columns = [
+    { field: 'nombre', headerName: 'Nombre', flex: 1 },
+    { field: 'apellido', headerName: 'Apellido', flex: 1 },
+    { field: 'email', headerName: 'Correo', flex: 1 },
+    { field: 'departamento', headerName: 'Departamento', flex: 1 },
+    { field: 'rol', headerName: 'Rol', flex: 1 },
+    userData?.rol === 'admin' && {
+      field: 'acciones',
+      headerName: 'Acciones',
+      width: 120,
+      sortable: false,
+      renderCell: (params) => (
+        <Box>
+          <IconButton onClick={() => handleOpenDialog(params.row)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
+            <EditIcon />
+          </IconButton>
+          <IconButton onClick={() => handleDelete(params.row.id)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
+            <DeleteIcon />
+          </IconButton>
+        </Box>
+      ),
+    },
+  ].filter(Boolean);
+
+  return (
+    <Box
+      sx={{
+        p: { xs: 1, sm: 2 },
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minWidth: 0,
+        minHeight: '90vh',
+        width: { xs: '100%', md: '80vw' },
+        maxWidth: '100vw',
+        margin: '0 auto',
+        boxSizing: 'border-box',
+      }}
+    >
+      <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
+        Usuarios
+      </Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+      <Paper elevation={1} sx={{ p: 2, borderRadius: 3, boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)', mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+          {userData?.rol === 'admin' && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              sx={{ borderRadius: 2, fontWeight: 500, bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined, '& .MuiSvgIcon-root': { color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : 'inherit' } }}
+            >
+              Agregar
+            </Button>
+          )}
+        </Box>
+          <DataGrid
+          rows={usuarios}
+          columns={columns}
+          pageSize={10}
+          rowsPerPageOptions={[5, 10, 20]}
+          disableSelectionOnClick
+          getRowId={(row) => row.id}
+          localeText={{ noRowsLabel: 'No hay usuarios' }}
+          sx={{
+            backgroundColor: 'background.paper',
+            borderRadius: 2,
+            boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)',
+            '& .MuiDataGrid-columnHeaders': {
+              background: theme => theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(90deg, #e3e6ec 0%, #f5f6fa 100%)',
+              color: theme => theme.palette.text.primary,
+              fontWeight: 700,
+              fontSize: '1.05rem',
+              letterSpacing: 0.5,
+              borderTopLeftRadius: 8,
+              borderTopRightRadius: 8,
+              textShadow: 'none',
+            },
+            '& .MuiDataGrid-row:hover': {
+              backgroundColor: theme => theme.palette.action.hover,
+            },
+            '& .MuiDataGrid-cell': {
+              fontSize: { xs: '0.95rem', sm: '1rem' },
+            },
+            minHeight: 400,
+          }}
+        />
+      </Paper>
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="xs">
+        <DialogTitle>{editId ? 'Editar Usuario' : 'Agregar Usuario'}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Nombre"
+            fullWidth
+            value={form.nombre}
+            onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
+          />
+          <TextField
+            margin="dense"
+            label="Apellido"
+            fullWidth
+            value={form.apellido}
+            onChange={e => setForm(f => ({ ...f, apellido: e.target.value }))}
+          />
+          <TextField
+            margin="dense"
+            label="Correo"
+            fullWidth
+            value={form.email}
+            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+            disabled={!!editId}
+          />
+          <TextField
+            select
+            margin="dense"
+            label="Departamento"
+            fullWidth
+            value={form.departamento}
+            onChange={e => setForm(f => ({ ...f, departamento: e.target.value }))}
+          >
+            {departamentos.length === 0 ? (
+              <MenuItem value="" disabled>No hay departamentos</MenuItem>
+            ) : (
+              departamentos.map((dep, idx) => (
+                <MenuItem key={idx} value={dep}>{dep}</MenuItem>
+              ))
+            )}
+          </TextField>
+          <TextField
+            select
+            margin="dense"
+            label="Rol"
+            fullWidth
+            value={form.rol}
+            onChange={e => setForm(f => ({ ...f, rol: e.target.value }))}
+          >
+            <MenuItem value="estandar">Estandar</MenuItem>
+            <MenuItem value="admin">Admin</MenuItem>
+          </TextField>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error">Cancelar</Button>
+          <Button onClick={handleSave} variant="contained">Guardar</Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}

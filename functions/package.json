@@ -1,0 +1,19 @@
+{
+  "name": "ticket-mail-backend",
+  "type": "module",
+  "version": "1.0.1",
+  "description": "Cloud Function HTTPS dedicada a envío de correos vía Microsoft Graph",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "scripts": {
+    "lint": "echo 'No lint config'",
+    "build": "echo 'No build step'",
+    "deploy": "firebase deploy --only functions:sendMail"
+  },
+  "dependencies": {
+    "firebase-functions": "^5.1.0",
+    "firebase-admin": "^12.4.0",
+    "@microsoft/microsoft-graph-client": "^3.0.1",
+    "isomorphic-fetch": "^3.0.0"
+  }
+}

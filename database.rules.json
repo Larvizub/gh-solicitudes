@@ -1,0 +1,52 @@
+{
+  "rules": {
+    "# Note": "Variant equilibrada: lectura pública para UI, escrituras autenticadas; admins via /admins node",
+    ".read": true,
+    ".write": "auth != null",
+
+    "tickets": {
+      ".indexOn": ["asignadoA", "usuarioEmail", "departamento"],
+      ".read": true,
+      ".write": "auth != null"
+    },
+
+    "usuarios": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && (auth.uid == $uid || root.child('admins').child(auth.uid).val() == true)"
+      }
+    },
+
+    "departamentos": {
+      ".read": true,
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() == true"
+    },
+
+    "tiposTickets": {
+      ".read": true,
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() == true"
+    },
+
+    "subcategoriasTickets": {
+      ".read": true,
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() == true"
+    },
+
+    "sla": {
+      ".read": true,
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() == true"
+    },
+
+    "configCorreo": {
+      ".read": true,
+      ".write": "auth != null && root.child('admins').child(auth.uid).val() == true"
+    },
+
+    "admins": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() == true"
+      }
+    }
+  }
+}

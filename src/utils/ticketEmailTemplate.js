@@ -1,0 +1,114 @@
+// Generador de HTML para correos de tickets.
+// Se usa en el frontend y se pasa como campo `html` al endpoint sendMail.
+// Así puedes iterar el diseño sin redeploy de la Cloud Function.
+
+/**
+ * @param {Object} options
+ * @param {Object} options.ticket - Datos del ticket
+ * @param {string} options.baseUrl - URL base de la app (ej: https://gh-solicitudes.web.app)
+ * @param {Object} [options.branding] - Overrides de branding
+ * @param {string} [options.extraMessage] - Texto adicional
+ * @returns {string} HTML listo para enviar
+ */
+export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraMessage }) {
+  const {
+    ticketId,
+    departamento,
+    departamentoNombre,
+    tipo,
+    estado,
+    subcategoria,
+    prioridad,
+    descripcion,
+    usuarioEmail,
+    usuario,
+    asignadoA,
+  } = ticket;
+
+  const primary = branding.primaryColor || '#273c2a';
+  const bg = branding.background || '#f5f6f8';
+  const surface = '#ffffff';
+  const divider = branding.divider || '#e3e7eb';
+  const textMain = branding.textMain || '#1f2933';
+  const textMuted = branding.textMuted || '#5d6b76';
+  const logo = branding.logoUrl || 'https://costaricacc.com/cccr/Logoheroica.png';
+  const company = branding.company || 'GH Solicitudes';
+  const footerNote = branding.footerNote || 'Mensaje automático generado por GH Solicitudes';
+  const headerColor = branding.headerColor || 'rgb(244, 191, 127)';
+
+  // helper simple para calcular si un color hex es claro
+  const isLightHex = (hex) => {
+    try {
+      const h = hex.replace('#','');
+      const r = parseInt(h.substring(0,2),16);
+      const g = parseInt(h.substring(2,4),16);
+      const b = parseInt(h.substring(4,6),16);
+      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+      return brightness > 155;
+    } catch { return false; }
+  };
+
+  const priorityColor = (p => ({ Alta:'#c62828', Media:'#ed6c02', Baja:'#2e7d32' }[p] || '#455a64'))(prioridad);
+  const stateColor = (s => ({ Nuevo: primary, 'En Proceso':'#1565c0', Cerrado:'#2e7d32', Resuelto:'#2e7d32', Finalizado:'#2e7d32' }[s] || primary))(estado);
+
+  const sanitize = (str='') => String(str).replace(/</g,'&lt;');
+
+  return `<!DOCTYPE html><html lang='es'><head><meta charset='utf-8'/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Actualización de ticket</title>
+  <style>@media (max-width:640px){.container{width:100%!important;border-radius:0!important;} .pad{padding:20px!important;}}</style>
+  </head>
+  <body style="margin:0;padding:0;background:${bg};font-family:Segoe UI,Roboto,Arial,sans-serif;color:${textMain};">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 0;">
+      <tr><td align="center">
+        <table role="presentation" class="container" width="640" style="width:640px;max-width:640px;background:${surface};border:1px solid ${divider};border-radius:10px;overflow:hidden;">
+          <tr><td style="padding:14px 20px;background:${headerColor};display:flex;align-items:center;gap:16px;">
+            <img src="${logo}" alt="${company}" style="height:38px;display:block;max-width:200px;" />
+            <span style="margin-left:auto;background:${stateColor};color:${isLightHex(headerColor)?'#000':'#fff'};font-size:12px;font-weight:600;padding:6px 12px;border-radius:16px;">${sanitize(estado)}</span>
+          </td></tr>
+          <tr><td class="pad" style="padding:26px 32px 24px;">
+            <h1 style="margin:0 0 6px;font-size:18px;font-weight:600;">${sanitize(tipo)}</h1>
+            <p style="margin:0 0 20px;font-size:13px;color:${textMuted};">Actualización del ticket (${sanitize(estado)}).</p>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid ${divider};border-radius:6px;border-collapse:collapse;margin:0 0 18px;">
+              ${row('Departamento', departamentoNombre || departamento)}
+              ${row('Subcategoría', subcategoria)}
+              ${row('Prioridad', prioridad, priorityColor)}
+              ${row('Estado', estado, stateColor)}
+              ${asignadoA ? row('Asignado a', asignadoA) : ''}
+            </table>
+            <div style="border:1px solid ${divider};background:${bg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;">${sanitize(descripcion)}</div>
+            ${extraMessage ? `<div style="margin:16px 0 0;font-size:12px;color:${textMuted};">${sanitize(extraMessage)}</div>`:''}
+            <p style="margin:18px 0 0;font-size:12px;color:${textMuted};">Creado por: ${sanitize(usuario||usuarioEmail||'Usuario')}</p>
+            <p style="margin:22px 0 4px;"><a href="${baseUrl}/tickets/${encodeURIComponent(ticketId)}" style="background:${primary};color:#fff;text-decoration:none;font-size:13px;padding:10px 20px;border-radius:6px;font-weight:600;display:inline-block;">Ver Ticket</a></p>
+            <p style="margin:18px 0 0;font-size:10px;color:${textMuted};">${sanitize(footerNote)}</p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body></html>`;
+
+  function row(label, value, badgeColor) {
+    if (!value) value = '';
+  const content = badgeColor ? `<span style="background:${badgeColor};color:#fff;font-size:11px;font-weight:600;padding:3px 10px;border-radius:14px;">${sanitize(value)}</span>` : sanitize(value);
+    return `<tr>
+  <td style="padding:6px 12px;font-size:12px;font-weight:600;color:${textMuted};width:120px;border-bottom:1px solid ${divider};">${sanitize(label)}</td>
+  <td style="padding:6px 12px;font-size:12px;color:${textMain};border-bottom:1px solid ${divider};">${content}</td>
+    </tr>`;
+  }
+}
+
+export function buildSendMailPayload({ ticket, departamento, departamentoNombre, htmlOverride, subject, actionMsg, cc }) {
+  return {
+    ticketId: ticket.ticketId,
+    departamento: departamento || ticket.departamento,
+    departamentoNombre: departamentoNombre || ticket.departamentoNombre || ticket.departamento,
+    tipo: ticket.tipo,
+    estado: ticket.estado,
+    descripcion: ticket.descripcion,
+    usuarioEmail: ticket.usuarioEmail,
+    subject,
+    actionMsg,
+    html: htmlOverride,
+    to: ticket.to || [],
+    cc: cc || []
+  };
+}

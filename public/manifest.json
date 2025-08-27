@@ -1,0 +1,25 @@
+{
+  "name": "GH Solicitudes",
+  "short_name": "Solicitudes",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#F2B05F",
+  "description": "Aplicación GH Solicitudes - gestión y reporte de tickets",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://grupoheroica.com/wp-content/uploads/2023/10/Icono-verde.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://grupoheroica.com/wp-content/uploads/2023/10/Icono-verde.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
