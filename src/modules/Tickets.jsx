@@ -643,7 +643,7 @@ export default function Tickets() {
             <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 1, color: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : 'primary.main' }}>
               Tickets (vista tabla)
             </Typography>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
               <Chip label={`Cerrados: ${closedCount}`} color="success" size="small" />
               <TextField
                 size="small"
@@ -651,7 +651,9 @@ export default function Tickets() {
                 value={tableFilter}
                 onChange={e => setTableFilter(e.target.value)}
                 sx={(theme) => ({
-                  minWidth: 160,
+                  minWidth: { xs: '100%', sm: 160 },
+                  width: { xs: '100%', sm: 'auto' },
+                  mt: { xs: 1, sm: 0 },
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 1,
                     bgcolor: (theme.palette.mode === 'dark' && tableFilter !== 'Todos') ? theme.palette.warning.light : undefined,
