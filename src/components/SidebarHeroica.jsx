@@ -33,7 +33,6 @@ const adminItems = [
   { text: 'Motivos Pausa', icon: <ScheduleIcon />, path: '/pause-reasons' },
   { text: 'Usuarios', icon: <PeopleIcon />, path: '/usuarios' },
   { text: 'SLA', icon: <ScheduleIcon />, path: '/sla' },
-  { text: 'Config. Correo', icon: <EmailIcon />, path: '/config-correo' },
   { text: 'Perfil', icon: <AccountCircleIcon />, path: '/perfil' },
 ];
 

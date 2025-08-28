@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Paper, Grid, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Button, TextField, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip } from '@mui/material';
+import { Box, Typography, Paper, Grid, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Button, TextField, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Alert } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import { ref, get, set } from 'firebase/database';
 import { useDb } from '../context/DbContext';
@@ -46,6 +46,8 @@ export default function Sla() {
   const [editDialog, setEditDialog] = useState({ open: false, departamento: null, prioridad: 'Alta', value: '' });
   const [subcatDialog, setSubcatDialog] = useState({ open: false, depId: null, tipoId: null, subId: null, prioridad: 'Alta', value: '' });
   const [scanResult, setScanResult] = useState({ total: 0, within: 0, breaches: [] });
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -137,6 +139,8 @@ export default function Sla() {
     const hours = Number(value) || 0;
     if (!departamento) return setEditDialog({ open: false, departamento: null, prioridad: 'Alta', value: '' });
     // write to DB
+    setError('');
+    setSuccess('');
     try {
       const path = `sla/configs/${departamento}`;
       const existing = (configs && configs[departamento]) || {};
@@ -146,14 +150,18 @@ export default function Sla() {
   await set(ref(dbInstance, path), next);
       // actualizar local
       setConfigs(prev => ({ ...prev, [departamento]: next }));
+      setSuccess('Configuración SLA guardada exitosamente');
     } catch (e) {
       console.error('Error guardando SLA', e);
+      setError('Error al guardar la configuración SLA');
     } finally {
       setEditDialog({ open: false, departamento: null, prioridad: 'Alta', value: '' });
     }
   };
 
   const saveSubcatAll = async (depId, tipoId, subId, obj) => {
+    setError('');
+    setSuccess('');
     try {
       const dbInstance = ctxDb || (recinto ? await getDbForRecinto(recinto) : null);
       if (!dbInstance) throw new Error('No DB');
@@ -173,8 +181,10 @@ export default function Sla() {
         copy[depId][tipoId][subId] = { ...(copy[depId][tipoId][subId] || {}), ...(obj || {}) };
         return copy;
       });
+      setSuccess('SLA de subcategoría guardado exitosamente');
     } catch (e) {
       console.error('Error guardando SLA subcategoria (all)', e);
+      setError('Error al guardar el SLA de subcategoría');
     }
   };
 
@@ -195,6 +205,8 @@ export default function Sla() {
   const saveSubcatSla = async () => {
     const { depId, tipoId, subId, prioridad, value } = subcatDialog;
     const hours = Number(value) || 0;
+    setError('');
+    setSuccess('');
     try {
       const dbInstance = ctxDb || (recinto ? await getDbForRecinto(recinto) : null);
       if (!dbInstance) throw new Error('No DB');
@@ -211,8 +223,10 @@ export default function Sla() {
         copy[depId][tipoId][subId][prioridad] = hours || null;
         return copy;
       });
+      setSuccess('SLA editado exitosamente');
     } catch (e) {
       console.error('Error guardando SLA subcategoría', e);
+      setError('Error al guardar el SLA');
     } finally {
       setSubcatDialog({ open: false, depId: null, tipoId: null, subId: null, prioridad: 'Alta', value: '' });
     }
@@ -227,6 +241,8 @@ export default function Sla() {
       ) : (
         <>
           <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>SLA - Gestión</Typography>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Paper sx={{ p: { xs: 1, sm: 2 }, borderRadius: 2 }} elevation={3}>

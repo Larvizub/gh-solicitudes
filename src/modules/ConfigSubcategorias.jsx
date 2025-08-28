@@ -22,7 +22,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { ref, get, push, set, update, remove } from 'firebase/database';
+import { ref, get, push, set, remove } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
 
@@ -107,7 +107,7 @@ export default function ConfigSubcategorias() {
       const dbInstance = ctxDb || (recinto ? await getDbForRecinto(recinto) : null);
       if (!dbInstance) throw new Error('No DB');
       if (editSub) {
-  await update(ref(dbInstance, `subcategoriasTickets/${depActivo}/${tipoActivo}/${editSub.id}`), nuevoSub);
+  await set(ref(dbInstance, `subcategoriasTickets/${depActivo}/${tipoActivo}/${editSub.id}`), nuevoSub);
         setSuccess('Subcategoría actualizada');
   // guardar SLA si se proporcionó (puede quedar vacío)
   const hours = Number(nuevoSla) || 0;

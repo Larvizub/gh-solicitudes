@@ -21,7 +21,6 @@ const Departamentos = React.lazy(() => import('./modules/Departamentos'));
 const DepartamentosUsuarios = React.lazy(() => import('./modules/DepartamentosUsuarios'));
 const ConfigTickets = React.lazy(() => import('./modules/ConfigTickets'));
 const Usuarios = React.lazy(() => import('./modules/Usuarios'));
-const ConfigCorreo = React.lazy(() => import('./modules/ConfigCorreo'));
 const ConfigSubcategorias = React.lazy(() => import('./modules/ConfigSubcategorias'));
 const Perfil = React.lazy(() => import('./modules/Perfil'));
 const Sla = React.lazy(() => import('./modules/Sla'));
@@ -68,7 +67,6 @@ export default function App() {
                   {userRole === 'admin' && <Route path="/config-tickets" element={<ConfigTickets />} />}
                   {userRole === 'admin' && <Route path="/config-subcategorias" element={<ConfigSubcategorias />} />}
                   {userRole === 'admin' && <Route path="/usuarios" element={<Usuarios />} />}
-                  {userRole === 'admin' && <Route path="/config-correo" element={<ConfigCorreo />} />}
                   {userRole === 'admin' && <Route path="/pause-reasons" element={<PauseReasons />} />}
                   <Route path="/perfil" element={<Perfil />} />
                   <Route path="*" element={<Navigate to="/dashboard" />} />

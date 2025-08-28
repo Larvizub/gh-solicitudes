@@ -24,7 +24,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { ref, get, set, update, remove, push } from "firebase/database";
+import { ref, get, set, remove, push } from "firebase/database";
 import { useDb } from "../context/DbContext";
 import { getDbForRecinto } from "../firebase/multiDb";
 
@@ -85,7 +85,7 @@ export default function ConfigTickets() {
       if (!dbInstance) throw new Error('No DB');
       if (editTipo) {
         // Editar
-        await update(ref(dbInstance, `tiposTickets/${depActivo}/${editTipo.id}`), nuevoTipo);
+        await set(ref(dbInstance, `tiposTickets/${depActivo}/${editTipo.id}`), nuevoTipo);
         setSuccess("Tipo actualizado");
       } else {
         // Agregar
