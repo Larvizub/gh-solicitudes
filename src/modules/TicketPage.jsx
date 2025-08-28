@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip } from '@mui/material';
+import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip, IconButton, Divider } from '@mui/material';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import SendIcon from '@mui/icons-material/Send';
 import AddIcon from '@mui/icons-material/Add';
 import UpdateIcon from '@mui/icons-material/Update';
 import { ref as dbRef, get, set, update, push, runTransaction } from 'firebase/database';
@@ -638,31 +640,93 @@ export default function TicketPage() {
           {/* Pause controls moved below the conversation */}
           {/* Comentarios */}
           {!isNew && (
-            <Paper sx={{ p: 2, mt: 1 }} elevation={0}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Conversación</Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Paper sx={{ p: 2, mt: 1, borderRadius: 3 }} elevation={0}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>Conversación</Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 360, overflowY: 'auto', pr: 1 }}>
                 {commentsArr && commentsArr.length === 0 && <Typography variant="body2" color="text.secondary">Aún no hay comentarios.</Typography>}
-                {commentsArr && commentsArr.map(c => (
-                  <Paper key={c.key} sx={{ p: 1, bgcolor: 'background.paper' }} elevation={1}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="subtitle2">{c.authorName || c.authorEmail}</Typography>
-                      <Typography variant="caption" color="text.secondary">{c.createdAt ? new Date(Number(c.createdAt)).toLocaleString() : ''}</Typography>
+                {commentsArr && commentsArr.map(c => {
+                  const isMine = (user?.uid && c.authorUid === user.uid) || ((user?.email || '').toLowerCase() === (c.authorEmail || '').toLowerCase());
+                  return (
+                    <Box key={c.key} sx={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          maxWidth: '85%',
+                          p: 1.2,
+                          px: 1.6,
+                          borderRadius: 3,
+                          bgcolor: theme => isMine ? theme.palette.primary.main : (theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200]),
+                          color: theme => isMine ? theme.palette.primary.contrastText : theme.palette.text.primary,
+                          boxShadow: 2,
+                          position: 'relative'
+                        }}
+                      >
+                        <Typography variant="caption" sx={{ fontWeight: 600, opacity: 0.85 }}>
+                          {c.authorName || c.authorEmail}
+                        </Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{c.text}</Typography>
+                        {c.attachmentUrl && (
+                          <Button href={c.attachmentUrl} target="_blank" size="small" variant="text" sx={{ mt: 0.5, textTransform: 'none', fontSize: 12, fontWeight: 600, color: 'inherit', opacity: 0.9 }}>
+                            📎 {c.attachmentName || 'Adjunto'}
+                          </Button>
+                        )}
+                        <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.6, textAlign: 'right' }}>
+                          {c.createdAt ? new Date(Number(c.createdAt)).toLocaleString() : ''}
+                        </Typography>
+                      </Paper>
                     </Box>
-                    <Typography variant="body2" sx={{ mt: 1 }}>{c.text}</Typography>
-                    {c.attachmentUrl && (
-                      <Box sx={{ mt: 1 }}>
-                        <Button href={c.attachmentUrl} target="_blank" size="small">{c.attachmentName || 'Adjunto'}</Button>
-                      </Box>
-                    )}
-                  </Paper>
-                ))}
-                <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <TextField multiline minRows={2} value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Escribe un comentario..." fullWidth disabled={saving} />
-                  <Button variant="outlined" component="label" sx={{ height: 40 }}>
-                    {newCommentFile ? newCommentFile.name : 'Adjuntar archivo'}
-                    <input type="file" hidden onChange={e => setNewCommentFile(e.target.files[0])} />
-                  </Button>
-                  <Button variant="contained" onClick={handleAddComment} disabled={saving || commentLoading || !canComment()} sx={{ height: 40 }}>Comentar</Button>
+                  );
+                })}
+              </Box>
+              <Divider sx={{ my: 2 }} />
+              <Box sx={{ mt: 1 }}>
+                <TextField
+                  multiline
+                  minRows={3}
+                  maxRows={14}
+                  value={newComment}
+                  onChange={e => setNewComment(e.target.value)}
+                  placeholder="Escribe un comentario... (Ctrl+Enter para enviar)"
+                  fullWidth
+                  disabled={saving}
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && canComment() && (newComment.trim() || newCommentFile) && !commentLoading) {
+                      e.preventDefault();
+                      handleAddComment();
+                    }
+                  }}
+                  sx={{
+                    '& .MuiInputBase-root': { borderRadius: 3 }
+                  }}
+                />
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 0.5 }}>
+                  <Tooltip title={newCommentFile ? newCommentFile.name : 'Adjuntar archivo'} placement="top">
+                    <span>
+                      <IconButton
+                        component="label"
+                        size="small"
+                        color={newCommentFile ? 'primary' : 'default'}
+                        disabled={saving}
+                        sx={{ bgcolor: newCommentFile ? 'primary.main' : 'action.hover', color: newCommentFile ? 'primary.contrastText' : 'text.secondary', '&:hover': { bgcolor: newCommentFile ? 'primary.dark' : 'action.selected' } }}
+                      >
+                        <AttachFileIcon fontSize="small" />
+                        <input type="file" hidden onChange={e => setNewCommentFile(e.target.files[0])} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Enviar comentario" placement="top">
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={handleAddComment}
+                        disabled={saving || commentLoading || !canComment() || (!newComment.trim() && !newCommentFile)}
+                        sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
+                      >
+                        <SendIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                 </Box>
               </Box>
             </Paper>

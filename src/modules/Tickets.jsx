@@ -737,7 +737,7 @@ export default function Tickets() {
                     <TableCell sx={{ fontWeight: 700 }}>Creado</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Categoría</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Subcategoría</TableCell>
-                  <TableCell sx={{ fontWeight: 700, maxWidth: { xs: 160, sm: 'none' } }}>Descripción</TableCell>
+                    {/* Columna Descripción eliminada para evitar textos largos que rompan el layout */}
                   <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>SLA Restante</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Usuario</TableCell>
@@ -746,11 +746,11 @@ export default function Tickets() {
                 </TableRow>
               </TableHead>
               <TableBody>
-        {filteredTickets.length === 0 ? (
-                  <TableRow>
-          <TableCell colSpan={11} align="center">Sin tickets registrados</TableCell>
-                  </TableRow>
-                ) : (
+  {filteredTickets.length === 0 ? (
+      <TableRow>
+    <TableCell colSpan={10} align="center">Sin tickets registrados</TableCell>
+      </TableRow>
+    ) : (
                   pageTickets.map(ticket => (
                     <TableRow key={ticket.id} hover sx={{ transition: 'background 0.2s' }}>
                       <TableCell>{ticket.departamento}</TableCell>
@@ -767,11 +767,7 @@ export default function Tickets() {
                       })()}</TableCell>
                       <TableCell>{ticket.tipo}</TableCell>
                       <TableCell>{ticket.subcategoria || '-'}</TableCell>
-                      <TableCell sx={{ maxWidth: { xs: 160, sm: 'none' } }}>
-                        <Box sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: { xs: 'nowrap', sm: 'normal' } }}>
-                          {ticket.descripcion}
-                        </Box>
-                      </TableCell>
+                      {/* Celda de Descripción eliminada */}
                       <TableCell>
                         <Chip label={ticket.estado} color={ticket.estado === 'Abierto' ? 'warning' : ticket.estado === 'En Proceso' ? 'info' : 'success'} size="small" />
                       </TableCell>
