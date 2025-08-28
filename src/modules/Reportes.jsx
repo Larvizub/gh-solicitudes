@@ -41,6 +41,11 @@ export default function Reportes() {
   const { db: ctxDb, recinto } = useDb();
   const [tickets, setTickets] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
+  // SLA configuration states
+  const [tipos, setTipos] = useState({});
+  const [subcats, setSubcats] = useState({});
+  const [slaConfigs, setSlaConfigs] = useState({});
+  const [slaSubcats, setSlaSubcats] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filtroDep, setFiltroDep] = useState('');
@@ -123,8 +128,8 @@ export default function Reportes() {
   const ticketsPorDepartamento = departamentos.map(dep => ({ name: dep.nombre, value: ticketsFiltrados.filter(t => t.departamento === dep.id).length }));
 
   // Nuevos datasets para gráficos adicionales
-  const tipos = Array.from(new Set(tickets.map(t => t.tipo).filter(Boolean)));
-  const ticketsPorTipo = tipos.map(tipo => ({ name: tipo, value: ticketsFiltrados.filter(t => t.tipo === tipo).length }));
+  const tiposUnicos = Array.from(new Set(tickets.map(t => t.tipo).filter(Boolean)));
+  const ticketsPorTipo = tiposUnicos.map(tipo => ({ name: tipo, value: ticketsFiltrados.filter(t => t.tipo === tipo).length }));
 
   // Top usuarios por cantidad de tickets
   const usuariosCount = {};
@@ -181,6 +186,26 @@ export default function Reportes() {
         } else {
           setTickets([]);
         }
+
+        // SLA configurations
+        try {
+          const [tiposSnap, subcatsSnap, slaConfigSnap, slaSubcatsSnap] = await Promise.all([
+            get(ref(dbInstance, 'tiposTickets')),
+            get(ref(dbInstance, 'subcategoriasTickets')),
+            get(ref(dbInstance, 'sla/configs')),
+            get(ref(dbInstance, 'sla/subcategorias'))
+          ]);
+          setTipos(tiposSnap.exists() ? tiposSnap.val() : {});
+          setSubcats(subcatsSnap.exists() ? subcatsSnap.val() : {});
+          setSlaConfigs(slaConfigSnap.exists() ? slaConfigSnap.val() : {});
+          setSlaSubcats(slaSubcatsSnap.exists() ? slaSubcatsSnap.val() : {});
+        } catch (e) {
+          console.warn('No se pudo cargar configuración SLA', e);
+          setTipos({});
+          setSubcats({});
+          setSlaConfigs({});
+          setSlaSubcats({});
+        }
       } catch {
         setError("Error al cargar los datos. Intenta de nuevo más tarde.");
       } finally {
@@ -189,6 +214,80 @@ export default function Reportes() {
     };
     fetchData();
   }, [ctxDb, recinto]);
+
+  // Función para calcular el tiempo restante del SLA
+  const calculateSlaRemaining = (ticket) => {
+    try {
+      // Si el ticket está cerrado, no mostrar tiempo restante
+      if (ticket.estado === 'Cerrado') return null;
+
+      // Obtener tiempo de creación
+      const parseTimestamp = (val) => {
+        if (!val) return null;
+        if (typeof val === 'number') return val < 1e12 ? val * 1000 : val;
+        if (typeof val === 'string') {
+          const n = parseInt(val, 10);
+          if (!isNaN(n)) return n < 1e12 ? n * 1000 : n;
+          const d = new Date(val);
+          return isNaN(d.getTime()) ? null : d.getTime();
+        }
+        if (typeof val === 'object' && val.seconds) return Number(val.seconds) * 1000;
+        return null;
+      };
+
+      const createdMs = parseTimestamp(ticket.createdAt || ticket.fecha || ticket.timestamp);
+      if (!createdMs) return null;
+
+      // Determinar SLA aplicable
+      let slaHours = null;
+      
+      // Intentar SLA por subcategoría
+      try {
+        const tiposForDept = tipos[ticket.departamento] || {};
+        const tipoEntry = Object.entries(tiposForDept).find(([, nombre]) => nombre === ticket.tipo);
+        const tipoId = tipoEntry ? tipoEntry[0] : null;
+        
+        if (tipoId && subcats[ticket.departamento] && subcats[ticket.departamento][tipoId]) {
+          const subEntries = Object.entries(subcats[ticket.departamento][tipoId]);
+          const found = subEntries.find(([, nombre]) => nombre === ticket.subcategoria);
+          const subId = found ? found[0] : null;
+          
+          if (subId && slaSubcats[ticket.departamento] && slaSubcats[ticket.departamento][tipoId] && slaSubcats[ticket.departamento][tipoId][subId]) {
+            const slaConfig = slaSubcats[ticket.departamento][tipoId][subId];
+            const priority = ticket.prioridad || 'Media';
+            slaHours = typeof slaConfig === 'object' ? slaConfig[priority] : (priority === 'Media' ? slaConfig : null);
+          }
+        }
+      } catch {
+        // Continuar con SLA por departamento
+      }
+
+      // Si no hay SLA por subcategoría, usar SLA por departamento
+      if (slaHours == null) {
+        const deptConfig = slaConfigs[ticket.departamento] || {};
+        const priority = ticket.prioridad || 'Media';
+        const DEFAULT_SLA = { Alta: 24, Media: 72, Baja: 168 };
+        slaHours = deptConfig[priority] ?? DEFAULT_SLA[priority] ?? 72;
+      }
+
+      // Calcular tiempo transcurrido en horas
+      const now = Date.now();
+      const elapsedMs = now - createdMs;
+      const elapsedHours = elapsedMs / (1000 * 60 * 60);
+      
+      // Calcular tiempo restante
+      const remainingHours = slaHours - elapsedHours;
+      
+      return {
+        remainingHours,
+        slaHours,
+        isExpired: remainingHours <= 0
+      };
+    } catch (e) {
+      console.warn('Error calculando SLA restante:', e);
+      return null;
+    }
+  };
 
   
 
@@ -280,10 +379,42 @@ export default function Reportes() {
       const ms = params.row && computeTicketResolutionMs(params.row);
       return <span>{ms !== null ? msToHoursMinutes(ms) : ''}</span>;
     } },
-    { field: 'tipo', headerName: 'Tipo', width: 120 },
+    { field: 'tipo', headerName: 'Categoría', width: 120 },
     { field: 'estado', headerName: 'Estado', width: 120, renderCell: (params) => (
       <Chip label={params.value} size="small" color={params.value === 'Abierto' ? 'warning' : params.value === 'En Proceso' ? 'info' : 'success'} />
     ) },
+    { field: 'slaRestante', headerName: 'SLA Restante', width: 140, renderCell: (params) => {
+      const slaInfo = calculateSlaRemaining(params.row);
+      if (!slaInfo) return <span>-</span>;
+      
+      const { remainingHours, isExpired } = slaInfo;
+      
+      if (isExpired) {
+        const overdue = Math.abs(remainingHours);
+        const days = Math.floor(overdue / 24);
+        const hours = Math.floor(overdue % 24);
+        return (
+          <Chip 
+            label={`Vencido: ${days > 0 ? `${days}d ` : ''}${hours}h`} 
+            color="error" 
+            size="small" 
+            variant="filled"
+          />
+        );
+      } else {
+        const days = Math.floor(remainingHours / 24);
+        const hours = Math.floor(remainingHours % 24);
+        const isUrgent = remainingHours <= 12;
+        return (
+          <Chip 
+            label={`${days > 0 ? `${days}d ` : ''}${hours}h`} 
+            color={isUrgent ? 'warning' : 'success'} 
+            size="small" 
+            variant={isUrgent ? 'filled' : 'outlined'}
+          />
+        );
+      }
+    } },
     { field: 'usuario', headerName: 'Usuario', width: 160 },
     { field: 'fecha', headerName: 'Fecha', width: 180, renderCell: (params) => {
       return <span>{resolveDateFromRow(params?.row)}</span>;
@@ -298,15 +429,34 @@ export default function Reportes() {
   // Exportar a Excel
   const handleExportExcel = () => {
     try {
-      const data = ticketsFiltrados.map(t => ({
-        descripcion: t.descripcion || '',
-        departamento: resolveDepartmentName(t.departamento),
-        tipo: t.tipo || '',
-        estado: t.estado || '',
-        usuario: t.usuario || '',
-        fecha: resolveDateFromRow(t),
-        adjunto: (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
-      }));
+      const data = ticketsFiltrados.map(t => {
+        const slaInfo = calculateSlaRemaining(t);
+        let slaText = '-';
+        if (slaInfo) {
+          const { remainingHours, isExpired } = slaInfo;
+          if (isExpired) {
+            const overdue = Math.abs(remainingHours);
+            const days = Math.floor(overdue / 24);
+            const hours = Math.floor(overdue % 24);
+            slaText = `Vencido: ${days > 0 ? `${days}d ` : ''}${hours}h`;
+          } else {
+            const days = Math.floor(remainingHours / 24);
+            const hours = Math.floor(remainingHours % 24);
+            slaText = `${days > 0 ? `${days}d ` : ''}${hours}h`;
+          }
+        }
+        
+        return {
+          descripcion: t.descripcion || '',
+          departamento: resolveDepartmentName(t.departamento),
+          tipo: t.tipo || '',
+          estado: t.estado || '',
+          slaRestante: slaText,
+          usuario: t.usuario || '',
+          fecha: resolveDateFromRow(t),
+          adjunto: (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
+        };
+      });
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Tickets');
@@ -366,20 +516,39 @@ export default function Reportes() {
       chartsY += chartHeight + 30;
 
       // Preparar datos tabla (sin ID, coincidente con la vista)
-      const bodyData = ticketsFiltrados.map(t => ([
-        t.descripcion || '',
-        resolveDepartmentName(t.departamento),
-        t.tipo || '',
-        t.estado || '',
-        t.usuario || '',
-        resolveDateFromRow(t),
-      ]));
+      const bodyData = ticketsFiltrados.map(t => {
+        const slaInfo = calculateSlaRemaining(t);
+        let slaText = '-';
+        if (slaInfo) {
+          const { remainingHours, isExpired } = slaInfo;
+          if (isExpired) {
+            const overdue = Math.abs(remainingHours);
+            const days = Math.floor(overdue / 24);
+            const hours = Math.floor(overdue % 24);
+            slaText = `Vencido: ${days > 0 ? `${days}d ` : ''}${hours}h`;
+          } else {
+            const days = Math.floor(remainingHours / 24);
+            const hours = Math.floor(remainingHours % 24);
+            slaText = `${days > 0 ? `${days}d ` : ''}${hours}h`;
+          }
+        }
+        
+        return [
+          t.descripcion || '',
+          resolveDepartmentName(t.departamento),
+          t.tipo || '',
+          t.estado || '',
+          slaText,
+          t.usuario || '',
+          resolveDateFromRow(t),
+        ];
+      });
 
       if (typeof autoTable !== 'function') {
         throw new Error('AutoTable plugin no disponible');
       }
       autoTable(doc, {
-        head: [['Descripción', 'Departamento', 'Tipo', 'Estado', 'Usuario', 'Fecha']],
+        head: [['Descripción', 'Departamento', 'Tipo', 'Estado', 'SLA Restante', 'Usuario', 'Fecha']],
         body: bodyData,
         startY: chartsY,
         margin: { left: 40, right: 40 },

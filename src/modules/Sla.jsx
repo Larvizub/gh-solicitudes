@@ -252,7 +252,7 @@ export default function Sla() {
                   <TableHead>
                     <TableRow>
                       <TableCell>Departamento</TableCell>
-                      <TableCell>Tipo</TableCell>
+                      <TableCell>Categoría</TableCell>
                       <TableCell>Subcategoría</TableCell>
                       <TableCell>Alta (h)</TableCell>
                       <TableCell>Media (h)</TableCell>

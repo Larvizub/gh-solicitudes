@@ -159,7 +159,7 @@ export default function ConfigSubcategorias() {
           <TableHead>
             <TableRow>
               <TableCell>Departamento</TableCell>
-              <TableCell>Tipo de Ticket</TableCell>
+              <TableCell>Categoría</TableCell>
               <TableCell>Subcategorías</TableCell>
               <TableCell>Acciones</TableCell>
             </TableRow>

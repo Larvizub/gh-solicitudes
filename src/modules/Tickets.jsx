@@ -20,6 +20,9 @@ export default function Tickets() {
   const [tipos, setTipos] = useState({});
   const [subcats, setSubcats] = useState({});
   const [usuarios, setUsuarios] = useState([]);
+  // SLA configuration states
+  const [slaConfigs, setSlaConfigs] = useState({});
+  const [slaSubcats, setSlaSubcats] = useState({});
   // const [tickets, setTickets] = useState([]); // ya no usamos el estado general
   const [assignedTickets, setAssignedTickets] = useState([]);
   const [createdTickets, setCreatedTickets] = useState([]);
@@ -81,6 +84,80 @@ export default function Tickets() {
     return false;
   };
 
+  // Función para calcular el tiempo restante del SLA
+  const calculateSlaRemaining = (ticket) => {
+    try {
+      // Si el ticket está cerrado, no mostrar tiempo restante
+      if (ticket.estado === 'Cerrado') return null;
+
+      // Obtener tiempo de creación
+      const parseTimestamp = (val) => {
+        if (!val) return null;
+        if (typeof val === 'number') return val < 1e12 ? val * 1000 : val;
+        if (typeof val === 'string') {
+          const n = parseInt(val, 10);
+          if (!isNaN(n)) return n < 1e12 ? n * 1000 : n;
+          const d = new Date(val);
+          return isNaN(d.getTime()) ? null : d.getTime();
+        }
+        if (typeof val === 'object' && val.seconds) return Number(val.seconds) * 1000;
+        return null;
+      };
+
+      const createdMs = parseTimestamp(ticket.createdAt || ticket.fecha || ticket.timestamp);
+      if (!createdMs) return null;
+
+      // Determinar SLA aplicable
+      let slaHours = null;
+      
+      // Intentar SLA por subcategoría
+      try {
+        const tiposForDept = tipos[ticket.departamento] || {};
+        const tipoEntry = Object.entries(tiposForDept).find(([, nombre]) => nombre === ticket.tipo);
+        const tipoId = tipoEntry ? tipoEntry[0] : null;
+        
+        if (tipoId && subcats[ticket.departamento] && subcats[ticket.departamento][tipoId]) {
+          const subEntries = Object.entries(subcats[ticket.departamento][tipoId]);
+          const found = subEntries.find(([, nombre]) => nombre === ticket.subcategoria);
+          const subId = found ? found[0] : null;
+          
+          if (subId && slaSubcats[ticket.departamento] && slaSubcats[ticket.departamento][tipoId] && slaSubcats[ticket.departamento][tipoId][subId]) {
+            const slaConfig = slaSubcats[ticket.departamento][tipoId][subId];
+            const priority = ticket.prioridad || 'Media';
+            slaHours = typeof slaConfig === 'object' ? slaConfig[priority] : (priority === 'Media' ? slaConfig : null);
+          }
+        }
+      } catch {
+        // Continuar con SLA por departamento
+      }
+
+      // Si no hay SLA por subcategoría, usar SLA por departamento
+      if (slaHours == null) {
+        const deptConfig = slaConfigs[ticket.departamento] || {};
+        const priority = ticket.prioridad || 'Media';
+        const DEFAULT_SLA = { Alta: 24, Media: 72, Baja: 168 };
+        slaHours = deptConfig[priority] ?? DEFAULT_SLA[priority] ?? 72;
+      }
+
+      // Calcular tiempo transcurrido en horas
+      const now = Date.now();
+      const elapsedMs = now - createdMs;
+      const elapsedHours = elapsedMs / (1000 * 60 * 60);
+      
+      // Calcular tiempo restante
+      const remainingHours = slaHours - elapsedHours;
+      
+      return {
+        remainingHours,
+        slaHours,
+        isExpired: remainingHours <= 0
+      };
+    } catch (e) {
+      console.warn('Error calculando SLA restante:', e);
+      return null;
+    }
+  };
+
   // Construir lista plana de tickets para la tabla (debe ir después de definir tickets a renderizar)
   const ticketsToRender = viewTab === 'assigned' ? assignedTickets
     : viewTab === 'created' ? createdTickets
@@ -122,7 +199,7 @@ export default function Tickets() {
         setDepartamentos([]);
       }
 
-      // Tipos y subcategordas: preferir datos del contexto si estan disponibles (onValue global)
+      // Tipos y subcategorias: preferir datos del contexto si estan disponibles (onValue global)
       if (tiposFromCtx && Object.keys(tiposFromCtx).length) setTipos(tiposFromCtx);
       else {
         const tiposSnap = await get(ref(dbInstance, "tiposTickets"));
@@ -132,6 +209,20 @@ export default function Tickets() {
       else {
         const subSnap = await get(ref(dbInstance, 'subcategoriasTickets'));
         setSubcats(subSnap.exists() ? subSnap.val() : {});
+      }
+
+      // SLA configurations
+      try {
+        const [slaConfigSnap, slaSubcatsSnap] = await Promise.all([
+          get(ref(dbInstance, 'sla/configs')),
+          get(ref(dbInstance, 'sla/subcategorias'))
+        ]);
+        setSlaConfigs(slaConfigSnap.exists() ? slaConfigSnap.val() : {});
+        setSlaSubcats(slaSubcatsSnap.exists() ? slaSubcatsSnap.val() : {});
+      } catch (e) {
+        console.warn('No se pudo cargar configuración SLA', e);
+        setSlaConfigs({});
+        setSlaSubcats({});
       }
 
       // Usuarios
@@ -681,10 +772,11 @@ export default function Tickets() {
                     <TableCell sx={{ fontWeight: 700 }}>Departamento</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Código</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Creado</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Tipo</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Categoría</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Subcategoría</TableCell>
                   <TableCell sx={{ fontWeight: 700, maxWidth: { xs: 160, sm: 'none' } }}>Descripción</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
+                  <TableCell sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>SLA Restante</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Usuario</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Adjunto</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>
@@ -693,7 +785,7 @@ export default function Tickets() {
               <TableBody>
         {filteredTickets.length === 0 ? (
                   <TableRow>
-          <TableCell colSpan={9} align="center">Sin tickets registrados</TableCell>
+          <TableCell colSpan={11} align="center">Sin tickets registrados</TableCell>
                   </TableRow>
                 ) : (
                   pageTickets.map(ticket => (
@@ -719,6 +811,40 @@ export default function Tickets() {
                       </TableCell>
                       <TableCell>
                         <Chip label={ticket.estado} color={ticket.estado === 'Abierto' ? 'warning' : ticket.estado === 'En Proceso' ? 'info' : 'success'} size="small" />
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                        {(() => {
+                          const slaInfo = calculateSlaRemaining(ticket);
+                          if (!slaInfo) return '-';
+                          
+                          const { remainingHours, isExpired } = slaInfo;
+                          
+                          if (isExpired) {
+                            const overdue = Math.abs(remainingHours);
+                            const days = Math.floor(overdue / 24);
+                            const hours = Math.floor(overdue % 24);
+                            return (
+                              <Chip 
+                                label={`Vencido: ${days > 0 ? `${days}d ` : ''}${hours}h`} 
+                                color="error" 
+                                size="small" 
+                                variant="filled"
+                              />
+                            );
+                          } else {
+                            const days = Math.floor(remainingHours / 24);
+                            const hours = Math.floor(remainingHours % 24);
+                            const isUrgent = remainingHours <= 12;
+                            return (
+                              <Chip 
+                                label={`${days > 0 ? `${days}d ` : ''}${hours}h`} 
+                                color={isUrgent ? 'warning' : 'success'} 
+                                size="small" 
+                                variant={isUrgent ? 'filled' : 'outlined'}
+                              />
+                            );
+                          }
+                        })()}
                       </TableCell>
                       <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{ticket.usuario}</TableCell>
                       <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
