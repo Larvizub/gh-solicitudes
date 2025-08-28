@@ -16,7 +16,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import { DataGrid } from "@mui/x-data-grid";
-import { ref, get, set, remove, update, push } from "firebase/database";
+import { ref, get, set, remove, push } from "firebase/database";
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
 
@@ -86,7 +86,7 @@ export default function Departamentos() {
         }
       }
       if (editId) {
-        await update(ref(dbInstance, `departamentos/${editId}`), nombre);
+        await set(ref(dbInstance, `departamentos/${editId}`), nombre);
         setSuccess("Departamento actualizado");
       } else {
         const newRef = push(ref(dbInstance, "departamentos"));
