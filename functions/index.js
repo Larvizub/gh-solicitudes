@@ -129,7 +129,18 @@ function validateApiKey(req) {
   return (req.headers['x-api-key'] === configured);
 }
 
-async function collectRecipients(departamento, usuarioEmail, extraRecipients) {
+async function getDepartmentName(departmentId) {
+  try {
+    const snap = await db.ref(`departamentos/${departmentId}`).once('value');
+    const dept = snap.val();
+    return dept && dept.nombre ? dept.nombre : departmentId;
+  } catch(e) {
+    console.warn('Error getting department name:', e.message);
+    return departmentId;
+  }
+}
+
+async function collectRecipients(departamento, usuarioEmail, extraRecipients, asignados) {
   let recipients = [];
   try {
     const snap = await db.ref(`configCorreo/departamentos/${departamento}/pool`).once('value');
@@ -138,6 +149,35 @@ async function collectRecipients(departamento, usuarioEmail, extraRecipients) {
   } catch(e){ console.log('Pool warn', e.message); }
   if (usuarioEmail) recipients.push(usuarioEmail);
   if (Array.isArray(extraRecipients)) recipients.push(...extraRecipients);
+  
+  // Agregar usuarios asignados al ticket
+  if (Array.isArray(asignados)) {
+    for (const asignado of asignados) {
+      if (typeof asignado === 'string') {
+        // Puede ser email o ID de usuario
+        if (/@/.test(asignado)) {
+          recipients.push(asignado);
+        } else {
+          // Es un ID de usuario, necesitamos obtener el email
+          try {
+            const userSnap = await db.ref(`usuarios/${asignado}`).once('value');
+            const userData = userSnap.val();
+            if (userData && userData.email) {
+              recipients.push(userData.email);
+            }
+          } catch(e) {
+            console.warn('Error getting assigned user email:', e.message);
+          }
+        }
+      } else if (asignado && typeof asignado === 'object') {
+        // Es un objeto {id, email, nombre}
+        if (asignado.email && /@/.test(asignado.email)) {
+          recipients.push(asignado.email);
+        }
+      }
+    }
+  }
+  
   recipients = [...new Set(recipients.filter(r => typeof r === 'string' && /@/.test(r)))];
   return recipients;
 }
@@ -151,7 +191,22 @@ async function sendTicketEmail(baseTicket, context) {
   if (explicitTo && explicitTo.length) {
     recipients = [...new Set(explicitTo)];
   } else {
-    recipients = await collectRecipients(baseTicket.departamento, baseTicket.usuarioEmail, context?.extraRecipients);
+    // Normalizar asignados de todos los formatos posibles
+    let asignados = [];
+    if (Array.isArray(baseTicket.asignados)) {
+      asignados = baseTicket.asignados;
+    } else if (baseTicket.asignadoEmail) {
+      asignados = [baseTicket.asignadoEmail];
+    } else if (baseTicket.asignadoA) {
+      asignados = [baseTicket.asignadoA];
+    } else if (baseTicket.asignado) {
+      if (Array.isArray(baseTicket.asignado)) {
+        asignados = baseTicket.asignado;
+      } else {
+        asignados = [baseTicket.asignado];
+      }
+    }
+    recipients = await collectRecipients(baseTicket.departamento, baseTicket.usuarioEmail, context?.extraRecipients, asignados);
   }
   if (!recipients.length && (!explicitCc || !explicitCc.length)) throw new Error('Sin destinatarios válidos');
   const token = await getGraphToken();
@@ -284,9 +339,28 @@ export const slaWarningScheduler = functions.pubsub.schedule('every 1 hours').on
           const logoUrl = (cfg.branding && cfg.branding.logo_url) || 'https://costaricacc.com/cccr/Logoheroica.png';
           const isLightHex = (hex) => { try { const h = String(hex||'').replace('#',''); const r = parseInt(h.substring(0,2),16); const g = parseInt(h.substring(2,4),16); const b = parseInt(h.substring(4,6),16); const brightness = (r * 299 + g * 587 + b * 114) / 1000; return brightness > 155; } catch { return false; } };
           const stateColor = '#f39c12';
-          const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Aviso SLA</title></head><body style="margin:0;padding:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:#f6f7f9;color:#222"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:20px 0"><tr><td align="center"><table role="presentation" width="640" style="width:640px;max-width:640px;background:#fff;border:1px solid #e6e9ec;border-radius:10px;overflow:hidden"><tr><td style="padding:14px 20px;background:${headerColor};display:flex;align-items:center;gap:12px"><img src="${logoUrl}" alt="Grupo Heroica" style="height:38px;display:block;max-width:220px"/><span style="margin-left:auto;background:${stateColor};color:${isLightHex(headerColor)?'#000':'#fff'};font-size:12px;font-weight:600;padding:6px 12px;border-radius:14px">${sanitize(ticket.estado)}</span></td></tr><tr><td style="padding:24px 28px"><h2 style="margin:0 0 8px;font-size:16px">Aviso: SLA en riesgo</h2><p style="margin:0 0 12px;color:#556">El ticket <strong>${sanitize(ticket.tipo)}</strong> del departamento <strong>${sanitize(ticket.departamento)}</strong> tiene aproximadamente <strong>${Math.round(remaining)} horas</strong> restantes antes de incumplir el SLA (objetivo: ${slaHours} horas).</p><p style="margin:0 0 12px">Estado actual: ${sanitize(ticket.estado)} — Prioridad: ${sanitize(priority)}</p>${ticketUrl?`<p style="margin:12px 0"><a href="${ticketUrl}" style="background:#273c2a;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;">Ver ticket</a></p>`:''}<p style="margin:14px 0 0;font-size:12px;color:#889">Este es un mensaje automático del sistema de notificaciones.</p></td></tr></table></td></tr></table></body></html>`;
-          // recopilar destinatarios
-          const recipients = await collectRecipients(ticket.departamento, ticket.usuarioEmail, null);
+          
+          // Obtener nombre del departamento
+          const departmentName = await getDepartmentName(ticket.departamento);
+          
+          const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Aviso SLA</title></head><body style="margin:0;padding:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:#f6f7f9;color:#222"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:20px 0"><tr><td align="center"><table role="presentation" width="640" style="width:640px;max-width:640px;background:#fff;border:1px solid #e6e9ec;border-radius:10px;overflow:hidden"><tr><td style="padding:14px 20px;background:${headerColor};display:flex;align-items:center;gap:12px"><img src="${logoUrl}" alt="Grupo Heroica" style="height:38px;display:block;max-width:220px"/><span style="margin-left:auto;background:${stateColor};color:${isLightHex(headerColor)?'#000':'#fff'};font-size:12px;font-weight:600;padding:6px 12px;border-radius:14px">${sanitize(ticket.estado)}</span></td></tr><tr><td style="padding:24px 28px"><h2 style="margin:0 0 8px;font-size:16px">Aviso: SLA en riesgo</h2><p style="margin:0 0 12px;color:#556">El ticket <strong>${sanitize(ticket.tipo)}</strong> del departamento <strong>${sanitize(departmentName)}</strong> tiene aproximadamente <strong>${Math.round(remaining)} horas</strong> restantes antes de incumplir el SLA (objetivo: ${slaHours} horas).</p><p style="margin:0 0 12px">Estado actual: ${sanitize(ticket.estado)} — Prioridad: ${sanitize(priority)}</p>${ticketUrl?`<p style="margin:12px 0"><a href="${ticketUrl}" style="background:#273c2a;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;">Ver ticket</a></p>`:''}<p style="margin:14px 0 0;font-size:12px;color:#889">Este es un mensaje automático del sistema de notificaciones.</p></td></tr></table></td></tr></table></body></html>`;
+          // recopilar destinatarios incluyendo usuarios asignados
+          // Normalizar asignados de todos los formatos posibles
+          let asignados = [];
+          if (Array.isArray(ticket.asignados)) {
+            asignados = ticket.asignados;
+          } else if (ticket.asignadoEmail) {
+            asignados = [ticket.asignadoEmail];
+          } else if (ticket.asignadoA) {
+            asignados = [ticket.asignadoA];
+          } else if (ticket.asignado) {
+            if (Array.isArray(ticket.asignado)) {
+              asignados = ticket.asignado;
+            } else {
+              asignados = [ticket.asignado];
+            }
+          }
+          const recipients = await collectRecipients(ticket.departamento, ticket.usuarioEmail, null, asignados);
           if (!recipients.length) {
             console.warn('No recipients for ticket', id);
             continue;
