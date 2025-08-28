@@ -51,11 +51,25 @@ export default function Register() {
     e.preventDefault();
     setError('');
     setLoading(true);
+    
     if (!departamento) {
       setError('Selecciona un departamento');
       setLoading(false);
       return;
     }
+    
+    if (password !== confirmPassword) {
+      setError('Las contraseñas no coinciden');
+      setLoading(false);
+      return;
+    }
+    
+    if (password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      setLoading(false);
+      return;
+    }
+    
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, { displayName: `${nombre} ${apellido}` });

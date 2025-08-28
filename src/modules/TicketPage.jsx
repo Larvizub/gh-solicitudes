@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar } from '@mui/material';
+import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import UpdateIcon from '@mui/icons-material/Update';
 import { ref as dbRef, get, set, update, push, runTransaction } from 'firebase/database';
 import { storage } from '../firebase/firebaseConfig';
 import { getDbForRecinto } from '../firebase/multiDb';
@@ -43,6 +45,8 @@ export default function TicketPage() {
   const [newCommentFile, setNewCommentFile] = useState(null);
   const [commentLoading, setCommentLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Estado para bloquear edición y evitar duplicados durante guardado
+  const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
   departamento: '', tipo: '', subcategoria: '', descripcion: '', estado: 'Abierto', usuario: '', usuarioEmail: '', adjuntoUrl: '', adjuntoNombre: '', asignados: [],
@@ -361,11 +365,13 @@ export default function TicketPage() {
   // Ensure pause-related state are referenced in render (avoid unused var lint) - will also display controls
 
   const handleSave = async () => {
+    if (saving) return; // prevenir doble click
     if (!form.departamento || !form.tipo || !form.subcategoria || !form.descripcion.trim()) {
       setError('Todos los campos son obligatorios');
       return;
     }
     setError('');
+    setSaving(true);
     try {
       const dbInstance = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
 
@@ -520,6 +526,7 @@ export default function TicketPage() {
     } catch (e) {
       console.error(e);
       setError('Error al guardar ticket');
+      setSaving(false);
     }
   };
 
@@ -582,17 +589,17 @@ export default function TicketPage() {
         {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
         {success && <Alert severity="success" sx={{ mt: 2 }}>{success}</Alert>}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <TextField select label="Solicitud para" value={form.departamento} onChange={e => setForm(f => ({ ...f, departamento: e.target.value, tipo: '' }))} disabled={!isNew && !isAdmin}>
+          <TextField select label="Solicitud para" value={form.departamento} onChange={e => setForm(f => ({ ...f, departamento: e.target.value, tipo: '' }))} disabled={saving || (!isNew && !isAdmin)}>
             <MenuItem value="" disabled>Selecciona un departamento</MenuItem>
             {departamentos.map(d => <MenuItem key={d.id} value={d.id}>{d.nombre}</MenuItem>)}
           </TextField>
-          <TextField select label="Categoría" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} disabled={!isNew && !isAdmin}>
+          <TextField select label="Categoría" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} disabled={saving || (!isNew && !isAdmin)}>
             <MenuItem value="" disabled>Selecciona una categoría</MenuItem>
             {form.departamento && tipos[form.departamento] && Object.entries(tipos[form.departamento]).map(([id, nombre]) => (
               <MenuItem key={id} value={nombre}>{nombre}</MenuItem>
             ))}
           </TextField>
-          <TextField select label="Subcategoría" value={form.subcategoria} onChange={e => setForm({...form, subcategoria: e.target.value})} disabled={!isNew && !isAdmin}>
+          <TextField select label="Subcategoría" value={form.subcategoria} onChange={e => setForm({...form, subcategoria: e.target.value})} disabled={saving || (!isNew && !isAdmin)}>
             <MenuItem value="" disabled>Selecciona una subcategoría</MenuItem>
             {form.departamento && tipos && subcats[form.departamento] && form.tipo && (() => {
               const tipoKey = Object.entries(tipos[form.departamento] || {}).find(([, nombre]) => nombre === form.tipo)?.[0];
@@ -613,15 +620,15 @@ export default function TicketPage() {
             getOptionLabel={opt => `${opt.nombre || ''} ${opt.apellido || ''}`.trim() || opt.email}
             value={usuarios.filter(u => (form.asignados || []).includes(u.id))}
             onChange={(_, newVal) => setForm(f => ({ ...f, asignados: newVal.map(u => u.id) }))}
-            disabled={!isNew && !isAdmin}
+            disabled={saving || (!isNew && !isAdmin)}
             renderInput={(params) => <TextField {...params} label="Asignar solicitud a: (múltiple)" />}
           />
-          <TextField label="Descripción" multiline minRows={3} value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} disabled={!isNew && !isAdmin} />
+          <TextField label="Descripción" multiline minRows={3} value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} disabled={saving || (!isNew && !isAdmin)} />
           <Box>
-            <Button variant="outlined" component="label" disabled={!isNew && !isAdmin}>{adjunto ? adjunto.name : (form.adjuntoNombre || 'Adjuntar archivo')}<input type="file" hidden onChange={e => setAdjunto(e.target.files[0])} /></Button>
+            <Button variant="outlined" component="label" disabled={saving || (!isNew && !isAdmin)}>{adjunto ? adjunto.name : (form.adjuntoNombre || 'Adjuntar archivo')}<input type="file" hidden onChange={e => setAdjunto(e.target.files[0])} /></Button>
             {(form.adjuntoUrl || adjunto) && <Box sx={{ mt: 1 }}><Typography variant="caption">{(adjunto && adjunto.name) || form.adjuntoNombre}</Typography></Box>}
           </Box>
-          <TextField select label="Estado" value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} disabled={isNew || (!isAdmin && !matchesAssignToUser(form, user))}>
+          <TextField select label="Estado" value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} disabled={saving || isNew || (!isAdmin && !matchesAssignToUser(form, user))}>
             <MenuItem value="Abierto">Abierto</MenuItem>
             <MenuItem value="En Proceso">En Proceso</MenuItem>
             <MenuItem value="Cerrado">Cerrado</MenuItem>
@@ -650,12 +657,12 @@ export default function TicketPage() {
                   </Paper>
                 ))}
                 <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <TextField multiline minRows={2} value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Escribe un comentario..." fullWidth />
+                  <TextField multiline minRows={2} value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Escribe un comentario..." fullWidth disabled={saving} />
                   <Button variant="outlined" component="label" sx={{ height: 40 }}>
                     {newCommentFile ? newCommentFile.name : 'Adjuntar archivo'}
                     <input type="file" hidden onChange={e => setNewCommentFile(e.target.files[0])} />
                   </Button>
-                  <Button variant="contained" onClick={handleAddComment} disabled={commentLoading || !canComment()} sx={{ height: 40 }}>Comentar</Button>
+                  <Button variant="contained" onClick={handleAddComment} disabled={saving || commentLoading || !canComment()} sx={{ height: 40 }}>Comentar</Button>
                 </Box>
               </Box>
             </Paper>
@@ -665,15 +672,15 @@ export default function TicketPage() {
             <Paper sx={{ p: 2, mt: 1 }} elevation={0}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>Control de Pausa</Typography>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-                <TextField select size="small" label="Motivo" value={pauseReasonId} onChange={e => setPauseReasonId(e.target.value)} sx={{ minWidth: 220 }}>
+                <TextField select size="small" label="Motivo" value={pauseReasonId} onChange={e => setPauseReasonId(e.target.value)} sx={{ minWidth: 220 }} disabled={saving}>
                   <MenuItem value="">(Sin seleccionar)</MenuItem>
                   {pauseReasons.map(r => <MenuItem key={r.id} value={r.id}>{r.nombre}</MenuItem>)}
                 </TextField>
-                <TextField size="small" label="Comentario" value={pauseComment} onChange={e => setPauseComment(e.target.value)} />
+                <TextField size="small" label="Comentario" value={pauseComment} onChange={e => setPauseComment(e.target.value)} disabled={saving} />
                 {!isPausedState ? (
-                  <Button disabled={!canControlPause || pauseLoading} variant="contained" color="warning" onClick={handlePause}>Pausar</Button>
+                  <Button disabled={saving || !canControlPause || pauseLoading} variant="contained" color="warning" onClick={handlePause}>Pausar</Button>
                 ) : (
-                  <Button disabled={!canControlPause || pauseLoading} variant="contained" color="success" onClick={handleResume}>Reanudar</Button>
+                  <Button disabled={saving || !canControlPause || pauseLoading} variant="contained" color="success" onClick={handleResume}>Reanudar</Button>
                 )}
               </Box>
               {pausesArr && pausesArr.length > 0 && (
@@ -693,8 +700,19 @@ export default function TicketPage() {
           )}
           {/* botones al final del formulario */}
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
-            <Button variant="outlined" onClick={() => navigate('/tickets')} color="inherit">Volver</Button>
-            <Button variant="contained" onClick={handleSave} disabled={!isNew && !isAdmin && !matchesAssignToUser(form, user)}>CREAR TICKET</Button>
+            <Button variant="outlined" onClick={() => navigate('/tickets')} color="inherit" disabled={saving}>Volver</Button>
+            <Tooltip placement="bottom" title={saving ? 'Guardando ticket...' : (isNew ? 'Crear ticket' : 'Actualizar ticket')}>
+              <span>
+                <Button 
+                  variant="contained" 
+                  onClick={handleSave} 
+                  disabled={saving || (!isNew && !isAdmin && !matchesAssignToUser(form, user))}
+                  startIcon={isNew ? <AddIcon /> : <UpdateIcon />}
+                >
+                  {saving ? (isNew ? 'CREANDO...' : 'GUARDANDO...') : (isNew ? 'CREAR TICKET' : 'ACTUALIZAR TICKET')}
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
         </Box>
       </Paper>

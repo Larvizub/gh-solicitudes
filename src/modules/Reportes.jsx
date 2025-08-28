@@ -28,6 +28,7 @@ import { ref, get } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
 import workingMsBetween from '../utils/businessHours';
+import { calculateSlaRemaining } from '../utils/slaCalculator';
 import { msToHoursMinutes } from '../utils/formatDuration';
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
@@ -215,78 +216,9 @@ export default function Reportes() {
     fetchData();
   }, [ctxDb, recinto]);
 
-  // Función para calcular el tiempo restante del SLA
-  const calculateSlaRemaining = (ticket) => {
-    try {
-      // Si el ticket está cerrado, no mostrar tiempo restante
-      if (ticket.estado === 'Cerrado') return null;
-
-      // Obtener tiempo de creación
-      const parseTimestamp = (val) => {
-        if (!val) return null;
-        if (typeof val === 'number') return val < 1e12 ? val * 1000 : val;
-        if (typeof val === 'string') {
-          const n = parseInt(val, 10);
-          if (!isNaN(n)) return n < 1e12 ? n * 1000 : n;
-          const d = new Date(val);
-          return isNaN(d.getTime()) ? null : d.getTime();
-        }
-        if (typeof val === 'object' && val.seconds) return Number(val.seconds) * 1000;
-        return null;
-      };
-
-      const createdMs = parseTimestamp(ticket.createdAt || ticket.fecha || ticket.timestamp);
-      if (!createdMs) return null;
-
-      // Determinar SLA aplicable
-      let slaHours = null;
-      
-      // Intentar SLA por subcategoría
-      try {
-        const tiposForDept = tipos[ticket.departamento] || {};
-        const tipoEntry = Object.entries(tiposForDept).find(([, nombre]) => nombre === ticket.tipo);
-        const tipoId = tipoEntry ? tipoEntry[0] : null;
-        
-        if (tipoId && subcats[ticket.departamento] && subcats[ticket.departamento][tipoId]) {
-          const subEntries = Object.entries(subcats[ticket.departamento][tipoId]);
-          const found = subEntries.find(([, nombre]) => nombre === ticket.subcategoria);
-          const subId = found ? found[0] : null;
-          
-          if (subId && slaSubcats[ticket.departamento] && slaSubcats[ticket.departamento][tipoId] && slaSubcats[ticket.departamento][tipoId][subId]) {
-            const slaConfig = slaSubcats[ticket.departamento][tipoId][subId];
-            const priority = ticket.prioridad || 'Media';
-            slaHours = typeof slaConfig === 'object' ? slaConfig[priority] : (priority === 'Media' ? slaConfig : null);
-          }
-        }
-      } catch {
-        // Continuar con SLA por departamento
-      }
-
-      // Si no hay SLA por subcategoría, usar SLA por departamento
-      if (slaHours == null) {
-        const deptConfig = slaConfigs[ticket.departamento] || {};
-        const priority = ticket.prioridad || 'Media';
-        const DEFAULT_SLA = { Alta: 24, Media: 72, Baja: 168 };
-        slaHours = deptConfig[priority] ?? DEFAULT_SLA[priority] ?? 72;
-      }
-
-      // Calcular tiempo transcurrido en horas
-      const now = Date.now();
-      const elapsedMs = now - createdMs;
-      const elapsedHours = elapsedMs / (1000 * 60 * 60);
-      
-      // Calcular tiempo restante
-      const remainingHours = slaHours - elapsedHours;
-      
-      return {
-        remainingHours,
-        slaHours,
-        isExpired: remainingHours <= 0
-      };
-    } catch (e) {
-      console.warn('Error calculando SLA restante:', e);
-      return null;
-    }
+  // Helper para calcular SLA usando la función utilitaria
+  const calculateSlaForTicket = (ticket) => {
+    return calculateSlaRemaining(ticket, slaConfigs, slaSubcats, tipos, subcats);
   };
 
   
@@ -384,30 +316,28 @@ export default function Reportes() {
       <Chip label={params.value} size="small" color={params.value === 'Abierto' ? 'warning' : params.value === 'En Proceso' ? 'info' : 'success'} />
     ) },
     { field: 'slaRestante', headerName: 'SLA Restante', width: 140, renderCell: (params) => {
-      const slaInfo = calculateSlaRemaining(params.row);
+      const slaInfo = calculateSlaForTicket(params.row);
       if (!slaInfo) return <span>-</span>;
       
-      const { remainingHours, isExpired } = slaInfo;
+  const { remainingHours, isExpired, overdueHours } = slaInfo;
       
       if (isExpired) {
-        const overdue = Math.abs(remainingHours);
-        const days = Math.floor(overdue / 24);
-        const hours = Math.floor(overdue % 24);
+  const totalHours = Math.round((overdueHours || Math.abs(remainingHours)) * 10) / 10; // Redondear a 1 decimal
         return (
           <Chip 
-            label={`Vencido: ${days > 0 ? `${days}d ` : ''}${hours}h`} 
+            label={`Vencido: ${totalHours}h`} 
             color="error" 
             size="small" 
             variant="filled"
           />
         );
       } else {
-        const days = Math.floor(remainingHours / 24);
-        const hours = Math.floor(remainingHours % 24);
-        const isUrgent = remainingHours <= 12;
+  const safeRemaining = remainingHours < 0 ? 0 : remainingHours;
+  const totalHours = Math.round(safeRemaining * 10) / 10; // Redondear a 1 decimal
+  const isUrgent = safeRemaining <= 12;
         return (
           <Chip 
-            label={`${days > 0 ? `${days}d ` : ''}${hours}h`} 
+            label={`${totalHours}h`} 
             color={isUrgent ? 'warning' : 'success'} 
             size="small" 
             variant={isUrgent ? 'filled' : 'outlined'}
@@ -430,19 +360,17 @@ export default function Reportes() {
   const handleExportExcel = () => {
     try {
       const data = ticketsFiltrados.map(t => {
-        const slaInfo = calculateSlaRemaining(t);
+        const slaInfo = calculateSlaForTicket(t);
         let slaText = '-';
         if (slaInfo) {
-          const { remainingHours, isExpired } = slaInfo;
+          const { remainingHours, isExpired, overdueHours } = slaInfo;
           if (isExpired) {
-            const overdue = Math.abs(remainingHours);
-            const days = Math.floor(overdue / 24);
-            const hours = Math.floor(overdue % 24);
-            slaText = `Vencido: ${days > 0 ? `${days}d ` : ''}${hours}h`;
+            const totalHours = Math.round(((overdueHours !== undefined ? overdueHours : Math.abs(remainingHours))) * 10) / 10;
+            slaText = `Vencido: ${totalHours}h`;
           } else {
-            const days = Math.floor(remainingHours / 24);
-            const hours = Math.floor(remainingHours % 24);
-            slaText = `${days > 0 ? `${days}d ` : ''}${hours}h`;
+            const safeRemaining = remainingHours < 0 ? 0 : remainingHours;
+            const totalHours = Math.round(safeRemaining * 10) / 10;
+            slaText = `${totalHours}h`;
           }
         }
         
@@ -516,20 +444,18 @@ export default function Reportes() {
       chartsY += chartHeight + 30;
 
       // Preparar datos tabla (sin ID, coincidente con la vista)
-      const bodyData = ticketsFiltrados.map(t => {
-        const slaInfo = calculateSlaRemaining(t);
+        const bodyData = ticketsFiltrados.map(t => {
+        const slaInfo = calculateSlaForTicket(t);
         let slaText = '-';
         if (slaInfo) {
-          const { remainingHours, isExpired } = slaInfo;
+          const { remainingHours, isExpired, overdueHours } = slaInfo;
           if (isExpired) {
-            const overdue = Math.abs(remainingHours);
-            const days = Math.floor(overdue / 24);
-            const hours = Math.floor(overdue % 24);
-            slaText = `Vencido: ${days > 0 ? `${days}d ` : ''}${hours}h`;
+            const totalHours = Math.round(((overdueHours !== undefined ? overdueHours : Math.abs(remainingHours))) * 10) / 10;
+            slaText = `Vencido: ${totalHours}h`;
           } else {
-            const days = Math.floor(remainingHours / 24);
-            const hours = Math.floor(remainingHours % 24);
-            slaText = `${days > 0 ? `${days}d ` : ''}${hours}h`;
+            const safeRemaining = remainingHours < 0 ? 0 : remainingHours;
+            const totalHours = Math.round(safeRemaining * 10) / 10;
+            slaText = `${totalHours}h`;
           }
         }
         

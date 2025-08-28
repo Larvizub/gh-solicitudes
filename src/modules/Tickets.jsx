@@ -2,10 +2,38 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import { generateTicketEmailHTML, buildSendMailPayload } from '../utils/ticketEmailTemplate';
 import { sendTicketMail } from '../services/mailService';
-import { Box, Typography, Button, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Alert, Paper, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Pagination, Tabs, Tab, Badge, Autocomplete } from "@mui/material";
+import { calculateSlaRemaining } from '../utils/slaCalculator';
+import { 
+  Box, 
+  Typography, 
+  Button, 
+  IconButton, 
+  Dialog, 
+  DialogTitle, 
+  DialogContent, 
+  DialogActions, 
+  TextField, 
+  MenuItem, 
+  Alert, 
+  Paper, 
+  Chip, 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow, 
+  Pagination, 
+  Tabs, 
+  Tab, 
+  Badge, 
+  Autocomplete 
+} from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import UpdateIcon from "@mui/icons-material/Update";
+import SaveIcon from "@mui/icons-material/Save";
 import { ref, get, set, update, remove, push, query, orderByChild } from "firebase/database";
 import { storage } from "../firebase/firebaseConfig";
 import { getDbForRecinto } from '../firebase/multiDb';
@@ -84,78 +112,9 @@ export default function Tickets() {
     return false;
   };
 
-  // Función para calcular el tiempo restante del SLA
-  const calculateSlaRemaining = (ticket) => {
-    try {
-      // Si el ticket está cerrado, no mostrar tiempo restante
-      if (ticket.estado === 'Cerrado') return null;
-
-      // Obtener tiempo de creación
-      const parseTimestamp = (val) => {
-        if (!val) return null;
-        if (typeof val === 'number') return val < 1e12 ? val * 1000 : val;
-        if (typeof val === 'string') {
-          const n = parseInt(val, 10);
-          if (!isNaN(n)) return n < 1e12 ? n * 1000 : n;
-          const d = new Date(val);
-          return isNaN(d.getTime()) ? null : d.getTime();
-        }
-        if (typeof val === 'object' && val.seconds) return Number(val.seconds) * 1000;
-        return null;
-      };
-
-      const createdMs = parseTimestamp(ticket.createdAt || ticket.fecha || ticket.timestamp);
-      if (!createdMs) return null;
-
-      // Determinar SLA aplicable
-      let slaHours = null;
-      
-      // Intentar SLA por subcategoría
-      try {
-        const tiposForDept = tipos[ticket.departamento] || {};
-        const tipoEntry = Object.entries(tiposForDept).find(([, nombre]) => nombre === ticket.tipo);
-        const tipoId = tipoEntry ? tipoEntry[0] : null;
-        
-        if (tipoId && subcats[ticket.departamento] && subcats[ticket.departamento][tipoId]) {
-          const subEntries = Object.entries(subcats[ticket.departamento][tipoId]);
-          const found = subEntries.find(([, nombre]) => nombre === ticket.subcategoria);
-          const subId = found ? found[0] : null;
-          
-          if (subId && slaSubcats[ticket.departamento] && slaSubcats[ticket.departamento][tipoId] && slaSubcats[ticket.departamento][tipoId][subId]) {
-            const slaConfig = slaSubcats[ticket.departamento][tipoId][subId];
-            const priority = ticket.prioridad || 'Media';
-            slaHours = typeof slaConfig === 'object' ? slaConfig[priority] : (priority === 'Media' ? slaConfig : null);
-          }
-        }
-      } catch {
-        // Continuar con SLA por departamento
-      }
-
-      // Si no hay SLA por subcategoría, usar SLA por departamento
-      if (slaHours == null) {
-        const deptConfig = slaConfigs[ticket.departamento] || {};
-        const priority = ticket.prioridad || 'Media';
-        const DEFAULT_SLA = { Alta: 24, Media: 72, Baja: 168 };
-        slaHours = deptConfig[priority] ?? DEFAULT_SLA[priority] ?? 72;
-      }
-
-      // Calcular tiempo transcurrido en horas
-      const now = Date.now();
-      const elapsedMs = now - createdMs;
-      const elapsedHours = elapsedMs / (1000 * 60 * 60);
-      
-      // Calcular tiempo restante
-      const remainingHours = slaHours - elapsedHours;
-      
-      return {
-        remainingHours,
-        slaHours,
-        isExpired: remainingHours <= 0
-      };
-    } catch (e) {
-      console.warn('Error calculando SLA restante:', e);
-      return null;
-    }
+  // Helper para calcular SLA usando la función utilitaria
+  const calculateSlaForTicket = (ticket) => {
+    return calculateSlaRemaining(ticket, slaConfigs, slaSubcats, tipos, subcats);
   };
 
   // Construir lista plana de tickets para la tabla (debe ir después de definir tickets a renderizar)
@@ -166,8 +125,10 @@ export default function Tickets() {
 
   const ticketsTabla = (ticketsToRender || []).map(t => ({
     ...t,
-  departamento: (departamentos.find(d => d.id === t.departamento)?.nombre) || t.departamento,
-  _createdAt: t.createdAt || t.fecha || t.timestamp || null,
+    // Guardamos el id original del departamento para cálculos SLA y mostramos el nombre amigable en la tabla
+    _departamentoId: t.departamento,
+    departamento: (departamentos.find(d => d.id === t.departamento)?.nombre) || t.departamento,
+    _createdAt: t.createdAt || t.fecha || t.timestamp || null,
   }));
 
   // Estado y utilidades para la vista de tabla (filtro y contador de cerrados)
@@ -178,8 +139,10 @@ export default function Tickets() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 25;
   const pageCount = Math.max(1, Math.ceil(filteredTickets.length / PAGE_SIZE));
-  // asegurarse de que la página esté en rango
-  if (page > pageCount) setPage(pageCount);
+  // asegurarse de que la página esté en rango usando useEffect
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
   const pageTickets = filteredTickets.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // Cargar departamentos, tipos y tickets
@@ -814,30 +777,28 @@ export default function Tickets() {
                       </TableCell>
                       <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                         {(() => {
-                          const slaInfo = calculateSlaRemaining(ticket);
+                          const slaInfo = calculateSlaForTicket(ticket);
                           if (!slaInfo) return '-';
                           
-                          const { remainingHours, isExpired } = slaInfo;
+                          const { remainingHours, isExpired, overdueHours } = slaInfo;
                           
                           if (isExpired) {
-                            const overdue = Math.abs(remainingHours);
-                            const days = Math.floor(overdue / 24);
-                            const hours = Math.floor(overdue % 24);
+                            const totalHours = Math.round(((overdueHours !== undefined ? overdueHours : Math.abs(remainingHours))) * 10) / 10; // Redondear a 1 decimal
                             return (
                               <Chip 
-                                label={`Vencido: ${days > 0 ? `${days}d ` : ''}${hours}h`} 
+                                label={`Vencido: ${totalHours}h`} 
                                 color="error" 
                                 size="small" 
                                 variant="filled"
                               />
                             );
                           } else {
-                            const days = Math.floor(remainingHours / 24);
-                            const hours = Math.floor(remainingHours % 24);
-                            const isUrgent = remainingHours <= 12;
+                            const safeRemaining = remainingHours < 0 ? 0 : remainingHours;
+                            const totalHours = Math.round(safeRemaining * 10) / 10; // Redondear a 1 decimal
+                            const isUrgent = safeRemaining <= 12;
                             return (
                               <Chip 
-                                label={`${days > 0 ? `${days}d ` : ''}${hours}h`} 
+                                label={`${totalHours}h`} 
                                 color={isUrgent ? 'warning' : 'success'} 
                                 size="small" 
                                 variant={isUrgent ? 'filled' : 'outlined'}
@@ -1051,7 +1012,14 @@ export default function Tickets() {
         </DialogContent>
         <DialogActions sx={{ p: 2, bgcolor: 'background.default', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
           <Button onClick={() => setOpenDialog(false)} variant="contained" color="error" sx={{ fontWeight: 700 }}>Cancelar</Button>
-          <Button onClick={handleSaveTicket} variant="contained" sx={{ fontWeight: 700 }}>Guardar</Button>
+          <Button 
+            onClick={handleSaveTicket} 
+            variant="contained" 
+            sx={{ fontWeight: 700 }}
+            startIcon={editTicket ? <UpdateIcon /> : <SaveIcon />}
+          >
+            {editTicket ? "Actualizar" : "Guardar"}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
