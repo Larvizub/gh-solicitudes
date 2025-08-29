@@ -16,7 +16,6 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import ApartmentIcon from '@mui/icons-material/Apartment';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PeopleIcon from '@mui/icons-material/People';
-import EmailIcon from '@mui/icons-material/Email';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import { useNavigate, useLocation } from 'react-router-dom';
