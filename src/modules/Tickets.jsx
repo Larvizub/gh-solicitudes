@@ -161,12 +161,15 @@ export default function Tickets() {
 
       // Departamentos
       const depSnap = await get(ref(dbInstance, "departamentos"));
+      let localDepartamentos = [];
       if (depSnap.exists()) {
         const deps = Object.entries(depSnap.val()).map(([id, nombre]) => ({ id, nombre }));
         deps.sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
         setDepartamentos(deps);
+        localDepartamentos = deps;
       } else {
         setDepartamentos([]);
+        localDepartamentos = [];
       }
 
       // Tipos y subcategorias: preferir datos del contexto si estan disponibles (onValue global)
@@ -209,6 +212,35 @@ export default function Tickets() {
         setUsuarios([]);
       }
 
+      // Preparar candidatos de departamento del usuario (puede ser nombre en userData)
+      const userDeptRaw = (userData?.departamento || '').trim();
+      const matchedDep = userDeptRaw ? localDepartamentos?.find(d => String(d.nombre).toLowerCase() === String(userDeptRaw).toLowerCase() || String(d.id) === String(userDeptRaw)) : null;
+      const userDeptCandidates = new Set([userDeptRaw, matchedDep?.id, matchedDep?.nombre].filter(Boolean));
+      const matchesUserDept = (ticketDept) => {
+        if (!userDeptCandidates.size) return false;
+        if (!ticketDept) return false;
+        if (userDeptCandidates.has(ticketDept)) return true;
+        if (typeof ticketDept === 'string') {
+          if (ticketDept.includes('/')) {
+            const last = ticketDept.split('/').filter(Boolean).pop();
+            if (last && userDeptCandidates.has(last)) return true;
+          }
+          const depByName = localDepartamentos.find(d => d.nombre === ticketDept);
+          if (depByName && (userDeptCandidates.has(depByName.id) || userDeptCandidates.has(depByName.nombre))) return true;
+        }
+        if (typeof ticketDept === 'object') {
+          const candId = ticketDept.id || ticketDept.key || ticketDept.value;
+          if (candId && userDeptCandidates.has(candId)) return true;
+          const candName = ticketDept.nombre || ticketDept.name || ticketDept.label;
+          if (candName && userDeptCandidates.has(candName)) return true;
+          if (candName) {
+            const depByName = localDepartamentos.find(d => d.nombre === candName);
+            if (depByName && userDeptCandidates.has(depByName.id)) return true;
+          }
+        }
+        return false;
+      };
+
       // Tickets: para rendimiento, hacer consultas por índices cuando sea posible
       try {
         if (isAdmin) {
@@ -227,7 +259,7 @@ export default function Tickets() {
           setAllTickets(all);
           setAssignedTickets(all.filter(t => matchesAssignToUser(t, user)));
           setCreatedTickets(all.filter(t => (t.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase()));
-          setDeptTickets(all.filter(t => t.departamento === userData?.departamento));
+          setDeptTickets(all.filter(t => matchesUserDept(t.departamento)));
         } else {
           // Ejecutar consultas específicas para minimizar lectura completa
           const uid = user?.uid || '';
@@ -258,7 +290,7 @@ export default function Tickets() {
           // Por departamento
           let depts = [];
           if (deptSnapTickets.exists()) {
-            depts = Object.entries(deptSnapTickets.val()).map(([id, t]) => ({ id, ...t })).filter(t => t.departamento === userData?.departamento);
+            depts = Object.entries(deptSnapTickets.val()).map(([id, t]) => ({ id, ...t })).filter(t => matchesUserDept(t.departamento));
           }
 
           // Unir resultados para la vista "allTickets" reducida (solo los relevantes para el usuario)
@@ -293,7 +325,9 @@ export default function Tickets() {
         setAllTickets(all);
         setAssignedTickets(all.filter(t => matchesAssignToUser(t, user)));
         setCreatedTickets(all.filter(t => (t.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase()));
-        setDeptTickets(all.filter(t => t.departamento === userData?.departamento));
+        setDeptTickets(all.filter(t => {
+          try { return matchesUserDept(t.departamento); } catch { return false; }
+        }));
       }
     };
     fetchData();
