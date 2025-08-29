@@ -41,7 +41,6 @@ export default function TicketPage() {
   const [subcats, setSubcats] = useState({});
   const [usuarios, setUsuarios] = useState([]);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [adjunto, setAdjunto] = useState(null);
   const [commentsArr, setCommentsArr] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -50,6 +49,7 @@ export default function TicketPage() {
   const [loading, setLoading] = useState(true);
   // Estado para bloquear edición y evitar duplicados durante guardado
   const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false); // para mostrar ENVIADO tras guardar
   // Modo de reasignación (permitir a usuario asignado cambiar asignados y subcategoría)
   const [reassignMode, setReassignMode] = useState(false);
 
@@ -380,7 +380,8 @@ export default function TicketPage() {
       return;
     }
     setError('');
-    setSaving(true);
+  setSaving(true);
+  setJustSaved(false);
     try {
       const dbInstance = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
 
@@ -430,7 +431,8 @@ export default function TicketPage() {
         // registrar fecha/hora de creación en ms
         ticketData.createdAt = Date.now();
     await set(newRef, ticketData);
-    setSuccess('Ticket creado');
+  // éxito gestionado vía snackbar
+  setSnackbar({ open: true, message: 'Ticket creado', severity: 'success' });
   ticketIdFinal = ticketData.codigo || newRef.key;
   // set ticketKey to the firebase key so subsequent ops use it
   setTicketKey(newRef.key);
@@ -523,7 +525,8 @@ export default function TicketPage() {
                 } catch (e) { console.warn('No se pudo enviar correo de reasignación', e); }
               }
             }
-            setSuccess('Ticket actualizado');
+            // éxito gestionado vía snackbar
+            setSnackbar({ open: true, message: 'Ticket actualizado', severity: 'success' });
             ticketIdFinal = ticketData.codigo || dbTicketId;
             if (reassignMode) setReassignMode(false);
           } else {
@@ -580,7 +583,8 @@ export default function TicketPage() {
                 }
               } catch (e) { console.warn('No se pudo enviar correo de reasignación (admin)', e); }
             }
-            setSuccess('Ticket actualizado');
+            // éxito gestionado vía snackbar
+            setSnackbar({ open: true, message: 'Ticket actualizado', severity: 'success' });
             ticketIdFinal = ticketData.codigo || dbTicketId2;
             if (reassignMode) setReassignMode(false);
           }
@@ -632,7 +636,9 @@ export default function TicketPage() {
             cc: []
           });
           await sendTicketMail(payload);
-          setSuccess(prev => (prev ? `${prev} (Notificación enviada)` : 'Notificación enviada'));
+          const finalMsg = isNew ? 'Ticket creado (Notificación enviada)' : 'Ticket actualizado (Notificación enviada)';
+          // éxito gestionado vía snackbar
+          setSnackbar({ open: true, message: finalMsg, severity: 'success' });
         } catch (e) {
           console.error('Error enviando notificación', e);
           setError(prev => (prev ? `${prev} (Falló notificación)` : 'Falló notificación por correo'));
@@ -640,7 +646,9 @@ export default function TicketPage() {
       }
 
   // navegar al ticket creado/actualizado: preferir codigo en la URL
-  setTimeout(() => navigate(`/tickets/${ticketData.codigo || ticketIdFinal}`), 700);
+  setJustSaved(true);
+  setSaving(false);
+  setTimeout(() => navigate(`/tickets/${ticketData.codigo || ticketIdFinal}`), 900);
     } catch (e) {
       console.error(e);
       setError('Error al guardar ticket');
@@ -704,8 +712,8 @@ export default function TicketPage() {
             )}
           </Box>
         </Box>
-        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
-        {success && <Alert severity="success" sx={{ mt: 2 }}>{success}</Alert>}
+  {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+  {/* Alert de éxito removido; se usa Snackbar inferior */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
           <TextField select label="Solicitud para" value={form.departamento} onChange={e => setForm(f => ({ ...f, departamento: e.target.value, tipo: '' }))} disabled={saving || (!isNew && !isAdmin)}>
             <MenuItem value="" disabled>Selecciona un departamento</MenuItem>
@@ -908,16 +916,16 @@ export default function TicketPage() {
           )}
           {/* botones al final del formulario */}
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
-            <Button variant="outlined" onClick={() => navigate('/tickets')} color="inherit" disabled={saving}>Volver</Button>
+            <Button variant="outlined" onClick={() => navigate('/tickets')} color="inherit" disabled={saving && !justSaved}>Volver</Button>
             <Tooltip placement="bottom" title={saving ? 'Guardando ticket...' : (isNew ? 'Crear ticket' : 'Actualizar ticket')}>
               <span>
                 <Button 
                   variant="contained" 
                   onClick={handleSave} 
-                  disabled={saving || (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || (reassignMode && wasOriginallyAssigned)))}
+                  disabled={(saving && !justSaved) || (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || (reassignMode && wasOriginallyAssigned)))}
                   startIcon={isNew ? <AddIcon /> : <UpdateIcon />}
                 >
-                  {saving ? (isNew ? 'CREANDO...' : 'GUARDANDO...') : (isNew ? 'CREAR TICKET' : 'ACTUALIZAR TICKET')}
+                  {saving && !justSaved ? (isNew ? 'CREANDO...' : 'GUARDANDO...') : (justSaved ? 'ENVIADO' : (isNew ? 'CREAR TICKET' : 'ACTUALIZAR TICKET'))}
                 </Button>
               </span>
             </Tooltip>
