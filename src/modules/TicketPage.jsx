@@ -67,6 +67,8 @@ export default function TicketPage() {
   const [pauseLoading, setPauseLoading] = useState(false);
   const [pauseReasons, setPauseReasons] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  // Flag para recordar si el usuario estaba originalmente asignado al cargar el ticket
+  const [wasOriginallyAssigned, setWasOriginallyAssigned] = useState(false);
 
   const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
 
@@ -161,6 +163,8 @@ export default function TicketPage() {
             setForm({
               departamento: t.departamento || '', tipo: t.tipo || '', subcategoria: t.subcategoria || '', descripcion: t.descripcion || '', estado: t.estado || 'Abierto', usuario: t.usuario || '', usuarioEmail: t.usuarioEmail || '', adjuntoUrl: t.adjuntoUrl || '', adjuntoNombre: t.adjuntoNombre || '', asignados: t.asignados || [], codigo: t.codigo || '',
             });
+            // Guardar si el usuario estaba asignado originalmente (permite quitarse y aún guardar en la misma sesión de reasignación)
+            try { setWasOriginallyAssigned(matchesAssignToUser(t, user)); } catch { /* ignore */ }
             // load comments if any (object -> array sorted asc)
             if (t.comments) {
               try {
@@ -186,7 +190,7 @@ export default function TicketPage() {
       }
     };
     load();
-  }, [id, isNew, ctxDb, recinto, dbLoading, user, userData, tiposFromCtx, subcatsFromCtx]);
+  }, [id, isNew, ctxDb, recinto, dbLoading, user, userData, tiposFromCtx, subcatsFromCtx]); // incluye user para recalcular wasOriginallyAssigned si cambia sesión
 
   // cargar motivos de pausa cuando cambia el departamento seleccionado (o cuando carga contexto DB)
   useEffect(() => {
@@ -441,12 +445,12 @@ export default function TicketPage() {
           const prev = existingSnap.exists() ? existingSnap.val() : {};
           const isAssignedPrev = matchesAssignToUser(prev, user);
           // permisos: solo admin o usuario asignado puede modificar
-          if (!isAdmin && !isAssignedPrev) {
+          if (!isAdmin && !isAssignedPrev && !(reassignMode && wasOriginallyAssigned)) {
             setError('No tienes permisos para modificar este ticket');
             return;
           }
-          // si es usuario asignado (no admin), permitir estado y (en modo reasignación) asignados/subcategoría
-          if (!isAdmin && isAssignedPrev) {
+          // si es usuario asignado (no admin) (o estaba asignado originalmente y está en modo reasignación), permitir estado y (en modo reasignación) asignados/subcategoría
+          if (!isAdmin && (isAssignedPrev || (reassignMode && wasOriginallyAssigned))) {
             const allowedUpdate = {};
             const changes = [];
             if (ticketData.estado && ticketData.estado !== prev.estado) {
@@ -733,7 +737,7 @@ export default function TicketPage() {
             disabled={saving || (!isNew && !isAdmin && !reassignMode)}
             renderInput={(params) => <TextField {...params} label="Asignar solicitud a: (múltiple)" />}
           />
-          {!isNew && (isAdmin || matchesAssignToUser(form, user)) && form.estado !== 'Cerrado' && (
+          {!isNew && (isAdmin || matchesAssignToUser(form, user) || (reassignMode && wasOriginallyAssigned)) && form.estado !== 'Cerrado' && (
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -1 }}>
               <Tooltip title={reassignMode ? 'Cancelar reasignación' : 'Reasignar ticket (cambiar asignados / subcategoría)'} placement="left">
                 <span>
@@ -910,7 +914,7 @@ export default function TicketPage() {
                 <Button 
                   variant="contained" 
                   onClick={handleSave} 
-                  disabled={saving || (!isNew && !isAdmin && !matchesAssignToUser(form, user))}
+                  disabled={saving || (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || (reassignMode && wasOriginallyAssigned)))}
                   startIcon={isNew ? <AddIcon /> : <UpdateIcon />}
                 >
                   {saving ? (isNew ? 'CREANDO...' : 'GUARDANDO...') : (isNew ? 'CREAR TICKET' : 'ACTUALIZAR TICKET')}
