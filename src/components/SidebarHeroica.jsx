@@ -109,8 +109,8 @@ const SidebarHeroica = ({ role, mini, variant, open, onClose, sx }) => {
       </Box>
       {/* Usuario en la parte inferior */}
   <Box sx={{ p: 2, pb: 3, display: 'flex', alignItems: 'center', gap: 1, minHeight: 64, background: theme => mini ? 'transparent' : (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.03)') }}>
-        <Avatar src={user?.photoURL || undefined} sx={{ width: 40, height: 40, fontSize: 22 }}>
-          {(!user?.photoURL && userData?.nombre) ? userData.nombre[0] : ''}
+        <Avatar src={user?.photoURL || userData?.photoURL || undefined} sx={{ width: 40, height: 40, fontSize: 22 }}>
+          {(!(user?.photoURL || userData?.photoURL) && userData?.nombre) ? userData.nombre[0] : ''}
         </Avatar>
         {!mini && (
           <Box sx={{ ml: 1, minWidth: 0, flex: 1 }}>

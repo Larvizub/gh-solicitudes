@@ -76,8 +76,8 @@ export default function AppBarHeroica({ onMenuClick, onMiniToggle, isMini, recin
         </Box>
         {/* Icono de usuario y menú (después del nombre) */}
         <IconButton onClick={handleMenu} color="inherit" sx={{ ml: 0 }}>
-          <Avatar src={user?.photoURL || undefined} sx={{ width: 36, height: 36, fontSize: 18 }}>
-            {(!user?.photoURL && userData?.nombre) ? userData.nombre[0] : ''}
+          <Avatar src={user?.photoURL || userData?.photoURL || undefined} sx={{ width: 36, height: 36, fontSize: 18 }}>
+            {(!(user?.photoURL || userData?.photoURL) && userData?.nombre) ? userData.nombre[0] : ''}
           </Avatar>
         </IconButton>
         <Menu

@@ -275,10 +275,41 @@ export default function Perfil() {
     return () => clearTimeout(t);
   }, [departamento, ctxDb, recinto, user]);
 
-  // Placeholder para cambio de avatar
-  const handleAvatarChange = () => {
-    // Aquí iría la lógica para subir la imagen y actualizar photoURL
-    setSuccess('Funcionalidad de cambio de avatar pendiente');
+  // Cambio de avatar con Firebase Storage
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !user) return;
+    setError('');
+    setSuccess('');
+    try {
+      if (!file.type.startsWith('image/')) {
+        setError('El archivo debe ser una imagen');
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) { // 2MB
+        setError('La imagen supera 2MB');
+        return;
+      }
+      const { getStorage, ref: sRef, uploadBytes, getDownloadURL } = await import('firebase/storage');
+      const storage = getStorage();
+      const storagePath = `avatars/${user.uid}/${Date.now()}-${file.name}`;
+      const fileRef = sRef(storage, storagePath);
+      await uploadBytes(fileRef, file, { contentType: file.type });
+      const url = await getDownloadURL(fileRef);
+      // Actualizar photoURL en Auth y en RTDB
+      const { updateProfile } = await import('firebase/auth');
+      await updateProfile(user, { photoURL: url });
+      const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+      await update(ref(dbToUse, `usuarios/${user.uid}`), { photoURL: url });
+      // Notificar a contexto para refrescar
+      if (typeof window !== 'undefined' && window.dispatchEvent) {
+        window.dispatchEvent(new Event('userProfileUpdated'));
+      }
+      setSuccess('Avatar actualizado');
+    } catch (err) {
+      console.error('Error subiendo avatar', err);
+      setError('Error al subir el avatar');
+    }
   };
 
   // Placeholder para eliminar cuenta
