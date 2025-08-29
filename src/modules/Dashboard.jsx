@@ -75,9 +75,46 @@ export default function Dashboard() {
 
   // Determinar si es admin
   const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
-  const userDeptId = userData?.departamento;
-  // Tickets visibles según rol
-  const viewTickets = isAdmin ? tickets : tickets.filter(t => t.departamento === userDeptId);
+  // El valor guardado en userData suele ser el NOMBRE del departamento, no el id
+  const userDeptName = userData?.departamento && String(userData.departamento).trim();
+  const userDeptIdFromName = userDeptName ? (departamentos.find(d => d.nombre === userDeptName)?.id) : undefined;
+  // Conjunto de candidatos (nombre e id) para comparar contra el campo departamento de los tickets
+  const userDeptCandidates = new Set([userDeptName, userDeptIdFromName].filter(Boolean));
+  // Para retrocompatibilidad si en algún momento userData.departamento era el id
+  const userDeptId = userDeptIdFromName || userDeptName; // conservamos variable usada después (aunque sea nombre)
+  // Helper para normalizar y comparar departamento del ticket con el del usuario
+  const matchesUserDepartment = (ticketDept) => {
+    if (!userDeptCandidates.size) return false;
+    if (!ticketDept) return false;
+    // Coincidencia directa (nombre o id)
+    if (userDeptCandidates.has(ticketDept)) return true;
+    // String con path '/departamentos/XYZ'
+    if (typeof ticketDept === 'string') {
+      if (ticketDept.includes('/')) {
+        const last = ticketDept.split('/').filter(Boolean).pop();
+        if (last && userDeptCandidates.has(last)) return true;
+      }
+      // Si es un nombre que apunta a un id de nuestros candidatos (por si ticket guarda nombre y userData tiene id)
+      const depByName = departamentos.find(d => d.nombre === ticketDept);
+      if (depByName && userDeptCandidates.has(depByName.id)) return true;
+    }
+    // Objeto { id, nombre }
+    if (typeof ticketDept === 'object') {
+      const candId = ticketDept.id || ticketDept.key || ticketDept.value;
+      if (candId && userDeptCandidates.has(candId)) return true;
+      const candName = ticketDept.nombre || ticketDept.name || ticketDept.label;
+      if (candName && userDeptCandidates.has(candName)) return true;
+      // Nombre que mapea a id
+      if (candName) {
+        const depByName = departamentos.find(d => d.nombre === candName);
+        if (depByName && userDeptCandidates.has(depByName.id)) return true;
+      }
+    }
+    return false;
+  };
+
+  // Tickets visibles según rol (admin ve todo, usuario solo los de su departamento)
+  const viewTickets = isAdmin ? tickets : tickets.filter(t => matchesUserDepartment(t.departamento));
   // Si no admin y aún no conocemos su departamento, no mostrar datos (vista vacía segura)
   const effectiveTickets = (!isAdmin && !userDeptId) ? [] : viewTickets;
 
@@ -91,20 +128,38 @@ export default function Dashboard() {
   const ticketsPorDepartamento = departamentos
     .map((dep) => ({
       departamento: dep.nombre,
-      count: effectiveTickets.filter(
-        (t) => t.departamento === dep.id || t.departamento === dep.nombre
-      ).length,
+      count: effectiveTickets.filter((t) => {
+        if (isAdmin) {
+          if (t.departamento === dep.id || t.departamento === dep.nombre) return true;
+          if (typeof t.departamento === 'string' && t.departamento.includes('/')) {
+            const last = t.departamento.split('/').filter(Boolean).pop();
+            if (last === dep.id) return true;
+          }
+          if (typeof t.departamento === 'object' && (t.departamento.id === dep.id || t.departamento.nombre === dep.nombre)) return true;
+          return false;
+        }
+        // Usuario normal: contamos solo su propio departamento (ya filtrado effectiveTickets pero mantenemos robustez)
+        return matchesUserDepartment(t.departamento);
+      }).length,
     }))
     .filter((d) => d.count > 0)
-    // Si no admin, limitar a su propio departamento
-    .filter(d => isAdmin || d.departamento === (departamentos.find(x => x.id === userDeptId)?.nombre));
+    .filter(d => isAdmin || userDeptCandidates.has(d.departamento) || userDeptCandidates.has(departamentos.find(x => x.nombre === d.departamento)?.id));
 
   // Gráfico de barras apiladas: tickets por estado y departamento
   const departamentosConTickets = departamentos.filter((dep) =>
-    effectiveTickets.some(
-      (t) => t.departamento === dep.id || t.departamento === dep.nombre
-    )
-  ).filter(dep => isAdmin || dep.id === userDeptId);
+    effectiveTickets.some((t) => {
+      if (isAdmin) {
+        if (t.departamento === dep.id || t.departamento === dep.nombre) return true;
+        if (typeof t.departamento === 'string' && t.departamento.includes('/')) {
+          const last = t.departamento.split('/').filter(Boolean).pop();
+          if (last === dep.id) return true;
+        }
+        if (typeof t.departamento === 'object' && (t.departamento.id === dep.id || t.departamento.nombre === dep.nombre)) return true;
+        return false;
+      }
+      return matchesUserDepartment(t.departamento);
+    })
+  ).filter(dep => isAdmin || userDeptCandidates.has(dep.id) || userDeptCandidates.has(dep.nombre));
   const dataBarrasApiladas = departamentosConTickets.map((dep) => {
     const depTickets = effectiveTickets.filter(
       (t) => t.departamento === dep.id || t.departamento === dep.nombre
