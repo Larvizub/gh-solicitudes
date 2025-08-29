@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip, IconButton, Divider } from '@mui/material';
+import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip, IconButton, Divider, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import SendIcon from '@mui/icons-material/Send';
 import AddIcon from '@mui/icons-material/Add';
 import UpdateIcon from '@mui/icons-material/Update';
-import { ref as dbRef, get, set, update, push, runTransaction } from 'firebase/database';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { ref as dbRef, get, set, update, push, runTransaction, remove } from 'firebase/database';
 import { storage } from '../firebase/firebaseConfig';
 import { getDbForRecinto } from '../firebase/multiDb';
 import { useDb } from '../context/DbContext';
@@ -67,10 +68,13 @@ export default function TicketPage() {
   const [pauseLoading, setPauseLoading] = useState(false);
   const [pauseReasons, setPauseReasons] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   // Flag para recordar si el usuario estaba originalmente asignado al cargar el ticket
   const [wasOriginallyAssigned, setWasOriginallyAssigned] = useState(false);
 
   const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
+  const canDelete = !isNew && (isAdmin || (user?.email && form?.usuarioEmail && String(form.usuarioEmail).toLowerCase() === String(user.email).toLowerCase()));
 
   // helper to check whether the current user is one of the assignees (compat across shapes)
   function matchesAssignToUser(ticket, userObj) {
@@ -656,6 +660,27 @@ export default function TicketPage() {
     }
   };
 
+  // Eliminar ticket (solo creador o admin)
+  const handleConfirmDelete = async () => {
+    if (!canDelete) { setDeleteDialogOpen(false); return; }
+    setDeleting(true);
+    try {
+      const dbInstance = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+      const dbTicketId = ticketKey || id;
+      await remove(dbRef(dbInstance, `tickets/${dbTicketId}`));
+      setSnackbar({ open: true, message: 'Ticket eliminado', severity: 'success' });
+      setDeleteDialogOpen(false);
+      // navegar atrás a listado
+      navigate('/tickets');
+    } catch (e) {
+      console.error('Error eliminando ticket', e);
+      setSnackbar({ open: true, message: 'Error eliminando ticket', severity: 'error' });
+      setDeleteDialogOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // compute worked time in ms for display (business hours minus pauses)
   const computeWorkedMsForTicket = (ticket) => {
     try {
@@ -704,13 +729,22 @@ export default function TicketPage() {
   return (
     <Box sx={{ p: { xs: 1, sm: 2 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Paper sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 900 }}>{isNew ? 'Nuevo Ticket' : `Ticket ${form.codigo || id}`}</Typography>
             {!isNew && (
               <Typography variant="caption" color="text.secondary">Tiempo trabajado: {msToHoursMinutes(computeWorkedMsForTicket(form))}</Typography>
             )}
           </Box>
+          {!isNew && canDelete && (
+            <Tooltip title="Eliminar ticket" placement="left">
+              <span>
+                <IconButton color="error" onClick={() => setDeleteDialogOpen(true)} disabled={saving || deleting} size="small" sx={{ bgcolor: 'error.light', '&:hover': { bgcolor: 'error.main', color: 'error.contrastText' } }}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
         </Box>
   {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
   {/* Alert de éxito removido; se usa Snackbar inferior */}
@@ -937,6 +971,16 @@ export default function TicketPage() {
           {snackbar.message}
         </Alert>
       </Snackbar>
+      <Dialog open={deleteDialogOpen} onClose={() => (!deleting && setDeleteDialogOpen(false))} maxWidth="xs" fullWidth>
+        <DialogTitle>Confirmar eliminación</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">¿Seguro que deseas eliminar este ticket? Esta acción no se puede deshacer.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>Cancelar</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleting}>{deleting ? 'Eliminando...' : 'Eliminar'}</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
