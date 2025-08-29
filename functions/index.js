@@ -133,7 +133,12 @@ async function getDepartmentName(departmentId) {
   try {
     const snap = await db.ref(`departamentos/${departmentId}`).once('value');
     const dept = snap.val();
-    return dept && dept.nombre ? dept.nombre : departmentId;
+    if (!dept) return departmentId;
+    if (typeof dept === 'string') return dept || departmentId;
+    if (typeof dept === 'object') {
+      return dept.nombre || dept.name || dept.label || departmentId;
+    }
+    return departmentId;
   } catch(e) {
     console.warn('Error getting department name:', e.message);
     return departmentId;

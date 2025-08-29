@@ -97,10 +97,30 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
 }
 
 export function buildSendMailPayload({ ticket, departamento, departamentoNombre, htmlOverride, subject, actionMsg, cc }) {
+  // Resolver nombre amigable de departamento si no se proporcionó explícitamente
+  let resolvedDepName = departamentoNombre || ticket.departamentoNombre;
+  const depId = departamento || ticket.departamento;
+  if (!resolvedDepName && depId) {
+    // Heurística: si hay un mapa en ticket.departamentosMap
+    if (ticket.departamentosMap && ticket.departamentosMap[depId]) {
+      resolvedDepName = ticket.departamentosMap[depId].nombre || ticket.departamentosMap[depId].name || ticket.departamentosMap[depId];
+    }
+    // O si hay un array ticket.departamentos
+    if (!resolvedDepName && Array.isArray(ticket.departamentos)) {
+      const found = ticket.departamentos.find(d => d.id === depId || d.key === depId);
+      if (found) resolvedDepName = found.nombre || found.name || found.label || depId;
+    }
+    // Quitar prefijos tipo '/departamentos/' si aparecen
+    if (!resolvedDepName && typeof depId === 'string') {
+      const parts = depId.split('/').filter(Boolean);
+      const last = parts[parts.length - 1];
+      resolvedDepName = last || depId;
+    }
+  }
   return {
     ticketId: ticket.ticketId,
-    departamento: departamento || ticket.departamento,
-    departamentoNombre: departamentoNombre || ticket.departamentoNombre || ticket.departamento,
+    departamento: depId,
+    departamentoNombre: resolvedDepName || depId,
     tipo: ticket.tipo,
     estado: ticket.estado,
     descripcion: ticket.descripcion,

@@ -36,9 +36,14 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function Reportes() {
-  // Refs para los gráficos
+  // Refs para los gráficos (todos los mostrados en UI)
   const pieRef = useRef();
   const barRef = useRef();
+  const tipoRef = useRef();
+  const topUsersRef = useRef();
+  const avgDeptRef = useRef();
+  const avgUserRef = useRef();
+  const monthlyRef = useRef();
   const { db: ctxDb, recinto } = useDb();
   const [tickets, setTickets] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
@@ -349,7 +354,6 @@ export default function Reportes() {
 
   // Columnas para DataGrid
   const columns = [
-    { field: 'descripcion', headerName: 'Descripción', flex: 1, minWidth: 180 },
     { field: 'departamento', headerName: 'Departamento', width: 160, renderCell: (params) => {
       return <span>{resolveDepartmentName(params?.row?.departamento)}</span>;
     } },
@@ -452,71 +456,48 @@ export default function Reportes() {
             slaText = `${totalHours}h`;
           }
         }
-        // Detalle de reasignaciones
-        let reasignacionesDetalle = '';
+        // Tiempo laboral formateado igual que en la tabla
+        const ms = computeTicketResolutionMs(t);
+        const tiempoLaboral = ms !== null ? msToHoursMinutes(ms) : '';
+        // Asignados solo si hay historial de reasignaciones con al menos 1 entrada
         let asignadosTexto = '';
         let lastReassignAt = '';
-        // Texto de asignados actuales
-        if (Array.isArray(t.asignados)) {
+        if (t?.reassignments) {
           try {
-            const list = t.asignados.map(a => {
-              if (!a) return '';
-              if (typeof a === 'string') return a;
-              if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
-              return '';
-            }).filter(Boolean);
-            const seen = new Set();
-            const dedup = [];
-            for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
-            asignadosTexto = dedup.join(', ');
-          } catch { /* ignore */ }
-        }
-        if (t.reassignments) {
-          try {
-            const arr = Object.entries(t.reassignments).map(([k,v]) => ({ id: k, ...v })).filter(([,v]) => v).sort((a,b)=> ((a[1]?.at||0)-(b[1]?.at||0)));
+            const arr = Object.values(t.reassignments).filter(Boolean);
             if (arr.length) {
-              const last = arr[arr.length - 1][1];
-              lastReassignAt = last?.at ? new Date(last.at).toLocaleString() : '';
-              reasignacionesDetalle = arr.map(([,r]) => {
-                const when = r.at ? new Date(r.at).toLocaleString() : '';
-                return `${when} | ${r.oldAssignees?.length||0}->${r.newAssignees?.length||0} subcat: ${r.oldSubcat||''}=>${r.newSubcat||''}`;
-              }).join('\n');
-              // Solo ahora construir asignadosTexto
+              const maxAt = arr.reduce((m,o)=> (o?.at && o.at>m?o.at:m),0);
+              if (maxAt) lastReassignAt = new Date(maxAt).toLocaleString();
               if (Array.isArray(t.asignados)) {
-                try {
-                  const list = t.asignados.map(a => {
-                    if (!a) return '';
-                    if (typeof a === 'string') return a;
-                    if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
-                    return '';
-                  }).filter(Boolean);
-                  const seen = new Set();
-                  const dedup = [];
-                  for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
-                  asignadosTexto = dedup.join(', ');
-                } catch { /* noop */ }
+                const list = t.asignados.map(a => {
+                  if (!a) return '';
+                  if (typeof a === 'string') return a;
+                  if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
+                  return '';
+                }).filter(Boolean);
+                const seen = new Set();
+                const dedup = [];
+                for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
+                asignadosTexto = dedup.join(', ');
               }
-            } else {
-              asignadosTexto = '';
             }
-          } catch { asignadosTexto = ''; }
+          } catch { /* noop */ }
         }
-        
+
         return {
-          descripcion: t.descripcion || '',
-          departamento: resolveDepartmentName(t.departamento),
-          tipo: t.tipo || '',
-          estado: t.estado || '',
-          slaRestante: slaText,
-          usuario: t.usuario || '',
-          fecha: resolveDateFromRow(t),
-          adjunto: (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
-          asignados: asignadosTexto,
-          lastReassignAt,
-          reasignacionesDetalle,
+          'Departamento': resolveDepartmentName(t.departamento),
+          'Tiempo (laboral)': tiempoLaboral,
+          'Categoría': t.tipo || '',
+          'Estado': t.estado || '',
+          'SLA Restante': slaText,
+          'Usuario': t.usuario || '',
+          'Fecha': resolveDateFromRow(t),
+          'Adjunto': (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
+          'Asignados': asignadosTexto,
+          'Última Reasignación': lastReassignAt,
         };
       });
-      const ws = XLSX.utils.json_to_sheet(data);
+      const ws = XLSX.utils.json_to_sheet(data, { skipHeader: false });
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Tickets');
       const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -535,44 +516,72 @@ export default function Reportes() {
     if (exportandoPdf) return;
     setExportandoPdf(true);
     try {
-      // Carga dinámica de html2canvas (evita problemas de SSR / tree-shaking)
+      // Carga dinámica de html2canvas
       const { default: dynamicHtml2canvas } = await import('html2canvas');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
       const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
       doc.setFontSize(16);
       doc.text('Reporte de Tickets', 40, 40);
 
-      let chartsY = 60;
-      const chartHeight = 160; // altura destino por gráfico
-      const gap = 20;
+      let cursorY = 60;
+      const marginX = 40;
+      const maxChartWidth = pageWidth - marginX * 2;
+      const twoColWidth = (pageWidth - marginX * 2 - 20) / 2; // 20 gap
+      const stdHeight = 160;
 
-      // Helper para capturar y añadir un gráfico
-      const addChart = async (refEl, x) => {
-        if (!refEl?.current) return false;
+  const addChartSingle = async (refEl) => {
+        if (!refEl?.current) return;
         try {
-          const canvas = await dynamicHtml2canvas(refEl.current, {
-            scale: 2, // mayor resolución
-            backgroundColor: '#ffffff',
-            useCORS: true,
-          });
-            const img = canvas.toDataURL('image/png');
-            const w = (pageWidth - 80 - gap) / 2; // dejar márgenes
-            doc.addImage(img, 'PNG', x, chartsY, w, chartHeight);
-          return true;
-        } catch (e) {
-          console.warn('No se pudo capturar un gráfico:', e);
-          return false;
-        }
+          const canvas = await dynamicHtml2canvas(refEl.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+          const img = canvas.toDataURL('image/png');
+          const aspect = canvas.width / canvas.height;
+          const w = maxChartWidth;
+          const h = w / aspect;
+          if (cursorY + h > pageHeight - 120) { // saltar página si no cabe
+            doc.addPage();
+            cursorY = 40;
+          }
+          doc.addImage(img, 'PNG', marginX, cursorY, w, h);
+          cursorY += h + 25;
+        } catch (e) { console.warn('Error capturando gráfico', e); }
       };
 
-      // Añadir gráficos lado a lado si ambos existen, si no ocupan toda la fila
-      const pieOk = await addChart(pieRef, 40);
-      const barOk = await addChart(barRef, pieOk ? (pageWidth / 2) : 40);
-      if (!pieOk && !barOk) {
-        doc.setFontSize(10);
-        doc.text('No se pudieron capturar los gráficos (ver consola).', 40, chartsY);
-      }
-      chartsY += chartHeight + 30;
+      const addChartPair = async (leftRef, rightRef) => {
+        const refs = [leftRef, rightRef];
+        // Si ambos nulos, nada
+        if (!refs[0]?.current && !refs[1]?.current) return;
+        // Calcular altura real de cada canvas y mantener proporción en dos columnas
+        const canvases = [];
+        for (const r of refs) {
+          if (r?.current) {
+            try {
+              const c = await dynamicHtml2canvas(r.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+              canvases.push(c);
+            } catch (e) { canvases.push(null); console.warn('Error canvas par', e); }
+          } else canvases.push(null);
+        }
+        const targetH = stdHeight;
+        const neededHeight = targetH; // uniform height
+        if (cursorY + neededHeight > pageHeight - 120) {
+          doc.addPage();
+          cursorY = 40;
+        }
+        const positions = [marginX, marginX + twoColWidth + 20];
+        canvases.forEach((c,i) => {
+          if (!c) return;
+            const img = c.toDataURL('image/png');
+            doc.addImage(img, 'PNG', positions[i], cursorY, twoColWidth, targetH);
+        });
+        cursorY += targetH + 25;
+      };
+
+      // Pares: (pie, dept), (tipo, topUsers), (avgDept, avgUser)
+      await addChartPair(pieRef, barRef);
+      await addChartPair(tipoRef, topUsersRef);
+      await addChartPair(avgDeptRef, avgUserRef);
+      // Single: mensual
+      await addChartSingle(monthlyRef);
 
       // Preparar datos tabla (sin ID, coincidente con la vista) + columnas de reasignaciones
         const bodyData = ticketsFiltrados.map(t => {
@@ -589,28 +598,18 @@ export default function Reportes() {
             slaText = `${totalHours}h`;
           }
         }
-        // Texto de asignados actuales
+        // Tiempo laboral
+        const ms = computeTicketResolutionMs(t);
+        const tiempoLaboral = ms !== null ? msToHoursMinutes(ms) : '';
+        // Asignados y última reasignación (solo si hay historial)
         let asignadosTexto = '';
         let lastReassignAt = '';
-        if (Array.isArray(t.asignados)) {
+        if (t?.reassignments) {
           try {
-            const list = t.asignados.map(a => {
-              if (!a) return '';
-              if (typeof a === 'string') return a;
-              if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
-              return '';
-            }).filter(Boolean);
-            const seen = new Set();
-            const dedup = [];
-            for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
-            asignadosTexto = dedup.join(', ');
-          } catch { /* noop */ }
-        }
-        if (t.reassignments) {
-          try {
-            const arrR = Object.values(t.reassignments).filter(Boolean).sort((a,b)=> (a.at||0)-(b.at||0));
-            if (arrR.length) {
-              lastReassignAt = arrR[arrR.length-1].at ? new Date(arrR[arrR.length-1].at).toLocaleString() : '';
+            const arr = Object.values(t.reassignments).filter(Boolean);
+            if (arr.length) {
+              const maxAt = arr.reduce((m,o)=> (o?.at && o.at>m?o.at:m),0);
+              if (maxAt) lastReassignAt = new Date(maxAt).toLocaleString();
               if (Array.isArray(t.asignados)) {
                 const list = t.asignados.map(a => {
                   if (!a) return '';
@@ -624,13 +623,12 @@ export default function Reportes() {
                 asignadosTexto = dedup.join(', ');
               }
             }
-          } catch { /* ignore */ }
+          } catch { /* noop */ }
         }
         const hasAdj = (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) ? 'Sí' : '';
-        
         return [
-          t.descripcion || '',
           resolveDepartmentName(t.departamento),
+          tiempoLaboral,
           t.tipo || '',
           t.estado || '',
           slaText,
@@ -646,9 +644,9 @@ export default function Reportes() {
         throw new Error('AutoTable plugin no disponible');
       }
       autoTable(doc, {
-        head: [['Descripción', 'Departamento', 'Tipo', 'Estado', 'SLA', 'Usuario', 'Fecha', 'Adjunto', 'Asignados', 'Últ. Reasig.']],
+  head: [['Departamento', 'Tiempo (laboral)', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Fecha', 'Adjunto', 'Asignados', 'Última Reasignación']],
         body: bodyData,
-        startY: chartsY,
+        startY: cursorY,
         margin: { left: 40, right: 40 },
         styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
         headStyles: { fillColor: [25, 118, 210], fontSize: 9 },
@@ -811,29 +809,39 @@ export default function Reportes() {
       {/* Nuevos gráficos adicionales */}
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, mt: 3, width: '100%' }}>
         <Paper elevation={2} sx={{ p: 2, borderRadius: 3, flex: 1 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tickets por Tipo</Typography>
-          <ReportesBarChart data={ticketsPorTipo} title="Tickets por Tipo" xKey="name" yKey="value" />
+          <Box ref={tipoRef} sx={{ width: '100%' }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tickets por Tipo</Typography>
+            <ReportesBarChart data={ticketsPorTipo} title="Tickets por Tipo" xKey="name" yKey="value" />
+          </Box>
         </Paper>
         <Paper elevation={2} sx={{ p: 2, borderRadius: 3, flex: 1 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Top Usuarios (tickets totales)</Typography>
-          <ReportesHorizontalBarChart data={topUsuarios} title="Top Usuarios (tickets totales)" xKey="name" yKey="value" />
+          <Box ref={topUsersRef} sx={{ width: '100%' }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Top Usuarios (tickets totales)</Typography>
+            <ReportesHorizontalBarChart data={topUsuarios} title="Top Usuarios (tickets totales)" xKey="name" yKey="value" />
+          </Box>
         </Paper>
       </Box>
 
       <Box sx={{ mt: 3 }}>
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, mb: 3 }}>
           <Paper elevation={2} sx={{ p: 2, borderRadius: 3, flex: 1 }}>
-            <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tiempo promedio de cierre de Tickets por Departamento (horas)</Typography>
-            <ReportesBarChart data={avgByDept} title="Tiempo promedio (horas)" xKey="name" yKey="value" />
+            <Box ref={avgDeptRef} sx={{ width: '100%' }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tiempo promedio de cierre de Tickets por Departamento (horas)</Typography>
+              <ReportesBarChart data={avgByDept} title="Tiempo promedio (horas)" xKey="name" yKey="value" />
+            </Box>
           </Paper>
           <Paper elevation={2} sx={{ p: 2, borderRadius: 3, flex: 1 }}>
-            <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tiempo promedio de cierre de Tickets por Usuario (horas)</Typography>
-            <ReportesBarChart data={avgByUser} title="Tiempo promedio (horas)" xKey="name" yKey="value" />
+            <Box ref={avgUserRef} sx={{ width: '100%' }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tiempo promedio de cierre de Tickets por Usuario (horas)</Typography>
+              <ReportesBarChart data={avgByUser} title="Tiempo promedio (horas)" xKey="name" yKey="value" />
+            </Box>
           </Paper>
         </Box>
         <Paper elevation={2} sx={{ p: 2, borderRadius: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tickets mensuales (acumulado)</Typography>
-          <ReportesAreaChart data={acumuladoMensual} title="Tickets mensuales (acumulado)" xKey="month" areas={[{ dataKey: 'total', color: '#1976d2' }]} />
+          <Box ref={monthlyRef} sx={{ width: '100%' }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tickets mensuales (acumulado)</Typography>
+            <ReportesAreaChart data={acumuladoMensual} title="Tickets mensuales (acumulado)" xKey="month" areas={[{ dataKey: 'total', color: '#1976d2' }]} />
+          </Box>
         </Paper>
       </Box>
   {/* avgByDept chart moved above replacing the monthly series chart */}
