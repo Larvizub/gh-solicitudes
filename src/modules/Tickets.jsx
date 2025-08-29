@@ -1,34 +1,35 @@
+// Import principal de MUI (un solo bloque para evitar duplicados)
 import React, { useEffect, useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import { generateTicketEmailHTML, buildSendMailPayload } from '../utils/ticketEmailTemplate';
 import { sendTicketMail } from '../services/mailService';
 import { calculateSlaRemaining } from '../utils/slaCalculator';
 import { 
-  Box, 
-  Typography, 
-  Button, 
-  IconButton, 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions, 
-  TextField, 
-  MenuItem, 
-  Alert, 
-  Paper, 
-  Chip, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  Pagination, 
-  Tabs, 
-  Tab, 
-  Badge, 
-  Autocomplete 
-} from "@mui/material";
+  Box,
+  Typography,
+  Button,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Alert,
+  Paper,
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Pagination,
+  Tabs,
+  Tab,
+  Badge,
+  Autocomplete
+} from '@mui/material';
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -80,6 +81,8 @@ export default function Tickets() {
   const [adjunto, setAdjunto] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, ticketId: null });
+  const [deleting, setDeleting] = useState(false);
   
   const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
 
@@ -516,14 +519,26 @@ export default function Tickets() {
     }
   };
 
-  // Eliminar ticket
-  const handleDeleteTicket = async (id) => {
+  // Eliminar ticket (solo creador o admin) con confirmación
+  const confirmDelete = (ticket) => {
+    const isCreator = (ticket.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase();
+    if (!(isAdmin || isCreator)) return;
+    setDeleteDialog({ open: true, ticketId: ticket.id });
+  };
+
+  const handleDeleteTicket = async () => {
+    if (!deleteDialog.ticketId) return;
+    setDeleting(true);
     try {
-  const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
-  await remove(ref(dbToUse, `tickets/${id}`));
-      setSuccess("Ticket eliminado");
-    } catch {
-      setError("Error al eliminar");
+      const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+      await remove(ref(dbToUse, `tickets/${deleteDialog.ticketId}`));
+      setSuccess('Ticket eliminado');
+    } catch (e) {
+      console.error('Error eliminando ticket', e);
+      setError('Error al eliminar');
+    } finally {
+      setDeleteDialog({ open: false, ticketId: null });
+      setDeleting(false);
     }
   };
 
@@ -702,10 +717,10 @@ export default function Tickets() {
                           {ticket.descripcion}
                         </Typography>
                         <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          { (isAdmin || (userData?.departamento && ticket.departamento === userData.departamento)) ? (
+              { (() => { const isCreator = (ticket.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase(); return (isAdmin || isCreator); })() ? (
                             <>
                               <IconButton size="small" onClick={() => handleOpenDialog(ticket)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.primary.main } }}><EditIcon fontSize="small" /></IconButton>
-                                <IconButton size="small" color="error" onClick={() => handleDeleteTicket(ticket.id)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}><DeleteIcon fontSize="small" /></IconButton>
+                <IconButton size="small" color="error" onClick={() => confirmDelete(ticket)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}><DeleteIcon fontSize="small" /></IconButton>
                             </>
                           ) : (
                             <>
@@ -851,10 +866,10 @@ export default function Tickets() {
                         )}
                       </TableCell>
                       <TableCell align="right">
-                        { (isAdmin || (userData?.departamento && ticket.departamento === userData.departamento)) ? (
+            { (() => { const isCreator = (ticket.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase(); return (isAdmin || isCreator); })() ? (
                           <>
                             <IconButton size="small" onClick={() => handleOpenDialog(ticket)} sx={{ color: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : 'primary.main' }}><EditIcon fontSize="small" /></IconButton>
-                            <IconButton size="small" color="error" onClick={() => handleDeleteTicket(ticket.id)}><DeleteIcon fontSize="small" /></IconButton>
+              <IconButton size="small" color="error" onClick={() => confirmDelete(ticket)}><DeleteIcon fontSize="small" /></IconButton>
                           </>
                         ) : (
                           <>
@@ -876,7 +891,7 @@ export default function Tickets() {
         </Paper>
       </Box>
 
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 4, boxShadow: 8 } }}>
+  <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 4, boxShadow: 8 } }}>
         <DialogTitle sx={{ bgcolor: form.estado === 'Cerrado' ? 'success.main' : form.estado === 'En Proceso' ? 'info.main' : 'warning.main', color: '#fff', fontWeight: 900, letterSpacing: 1, textAlign: 'center', borderTopLeftRadius: 16, borderTopRightRadius: 16, boxShadow: 2 }}>
           {editTicket ? "Editar Ticket" : "Nuevo Ticket"}
         </DialogTitle>
@@ -1059,6 +1074,17 @@ export default function Tickets() {
           </Button>
         </DialogActions>
       </Dialog>
+      {/* Dialogo confirmación eliminación */}
+      <Dialog open={deleteDialog.open} onClose={() => (!deleting && setDeleteDialog({ open: false, ticketId: null }))} maxWidth="xs" fullWidth>
+      <DialogTitle>Eliminar ticket</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2">¿Confirmas que deseas eliminar este ticket? Esta acción no se puede deshacer.</Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setDeleteDialog({ open: false, ticketId: null })} disabled={deleting}>Cancelar</Button>
+        <Button onClick={handleDeleteTicket} color="error" variant="contained" disabled={deleting}>{deleting ? 'Eliminando...' : 'Eliminar'}</Button>
+      </DialogActions>
+    </Dialog>
     </Box>
   );
 }
