@@ -11,6 +11,7 @@ import {
 import { BarChart, PieChart, LineChart } from "@mui/x-charts";
 import { ref, get } from "firebase/database";
 import { useDb } from '../context/DbContext';
+import { useAuth } from '../context/useAuth';
 
 export default function Dashboard() {
   const theme = useTheme();
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { db: ctxDb, recinto } = useDb();
+  const { userData } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -71,30 +73,40 @@ export default function Dashboard() {
     fetchData();
   }, [ctxDb, recinto]);
 
-  // Estadísticas
-  const total = tickets.length;
+  // Determinar si es admin
+  const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
+  const userDeptId = userData?.departamento;
+  // Tickets visibles según rol
+  const viewTickets = isAdmin ? tickets : tickets.filter(t => t.departamento === userDeptId);
+  // Si no admin y aún no conocemos su departamento, no mostrar datos (vista vacía segura)
+  const effectiveTickets = (!isAdmin && !userDeptId) ? [] : viewTickets;
+
+  // Estadísticas basadas en tickets visibles
+  const total = effectiveTickets.length;
   const estados = ["Abierto", "En Proceso", "Cerrado"];
   const ticketsPorEstado = estados.map((e) => ({
     estado: e,
-    count: tickets.filter((t) => t.estado === e).length,
+    count: effectiveTickets.filter((t) => t.estado === e).length,
   }));
   const ticketsPorDepartamento = departamentos
     .map((dep) => ({
       departamento: dep.nombre,
-      count: tickets.filter(
+      count: effectiveTickets.filter(
         (t) => t.departamento === dep.id || t.departamento === dep.nombre
       ).length,
     }))
-    .filter((d) => d.count > 0);
+    .filter((d) => d.count > 0)
+    // Si no admin, limitar a su propio departamento
+    .filter(d => isAdmin || d.departamento === (departamentos.find(x => x.id === userDeptId)?.nombre));
 
   // Gráfico de barras apiladas: tickets por estado y departamento
   const departamentosConTickets = departamentos.filter((dep) =>
-    tickets.some(
+    effectiveTickets.some(
       (t) => t.departamento === dep.id || t.departamento === dep.nombre
     )
-  );
+  ).filter(dep => isAdmin || dep.id === userDeptId);
   const dataBarrasApiladas = departamentosConTickets.map((dep) => {
-    const depTickets = tickets.filter(
+    const depTickets = effectiveTickets.filter(
       (t) => t.departamento === dep.id || t.departamento === dep.nombre
     );
     return {
@@ -107,9 +119,9 @@ export default function Dashboard() {
 
   // Gráfico de línea: tendencia mensual (siempre muestra datos aunque no haya campo fecha)
   let dataLinea = [];
-  if (tickets.length > 0) {
+  if (effectiveTickets.length > 0) {
     const meses = {};
-    tickets.forEach((t) => {
+    effectiveTickets.forEach((t) => {
       let d = null;
       if (t.fecha) {
         d = new Date(t.fecha);
@@ -407,7 +419,7 @@ export default function Dashboard() {
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
               Tickets recientes
             </Typography>
-            {tickets
+            {effectiveTickets
               .slice(-5)
               .reverse()
               .map((t) => (
@@ -454,7 +466,7 @@ export default function Dashboard() {
                   </Box>
                 </Box>
               ))}
-            {tickets.length === 0 && (
+            {effectiveTickets.length === 0 && (
               <Typography variant="body2" color="text.secondary">
                 No hay tickets registrados
               </Typography>
