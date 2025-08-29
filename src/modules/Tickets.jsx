@@ -717,16 +717,13 @@ export default function Tickets() {
                           {ticket.descripcion}
                         </Typography>
                         <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              { (() => { const isCreator = (ticket.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase(); return (isAdmin || isCreator); })() ? (
-                            <>
-                              <IconButton size="small" onClick={() => handleOpenDialog(ticket)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.primary.main } }}><EditIcon fontSize="small" /></IconButton>
-                <IconButton size="small" color="error" onClick={() => confirmDelete(ticket)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}><DeleteIcon fontSize="small" /></IconButton>
-                            </>
-                          ) : (
-                            <>
-                              <IconButton size="small" disabled sx={{ color: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : 'primary.main' }}><EditIcon fontSize="small" /></IconButton>
-                              <IconButton size="small" disabled color="error"><DeleteIcon fontSize="small" /></IconButton>
-                            </>
+                          <IconButton size="small" onClick={() => handleOpenDialog(ticket)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.primary.main } }}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          {(() => { const isCreator = (ticket.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase(); return (isAdmin || isCreator); })() && (
+                            <IconButton size="small" color="error" onClick={() => confirmDelete(ticket)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
                           )}
                         </Box>
                       </Box>
@@ -866,16 +863,13 @@ export default function Tickets() {
                         )}
                       </TableCell>
                       <TableCell align="right">
-            { (() => { const isCreator = (ticket.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase(); return (isAdmin || isCreator); })() ? (
-                          <>
-                            <IconButton size="small" onClick={() => handleOpenDialog(ticket)} sx={{ color: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : 'primary.main' }}><EditIcon fontSize="small" /></IconButton>
-              <IconButton size="small" color="error" onClick={() => confirmDelete(ticket)}><DeleteIcon fontSize="small" /></IconButton>
-                          </>
-                        ) : (
-                          <>
-                            <IconButton size="small" disabled sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.primary.main } }}><EditIcon fontSize="small" /></IconButton>
-                            <IconButton size="small" disabled color="error" sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}><DeleteIcon fontSize="small" /></IconButton>
-                          </>
+                        <IconButton size="small" onClick={() => handleOpenDialog(ticket)} sx={{ color: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : 'primary.main' }}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        {(() => { const isCreator = (ticket.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase(); return (isAdmin || isCreator); })() && (
+                          <IconButton size="small" color="error" onClick={() => confirmDelete(ticket)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
                         )}
                       </TableCell>
                     </TableRow>
