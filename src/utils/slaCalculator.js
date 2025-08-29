@@ -28,7 +28,8 @@ export const calculateSlaRemaining = (ticket, slaConfig = {}, slaSubcatsConfig =
       return null;
     };
 
-    const createdMs = parseTimestamp(ticket.createdAt || ticket.fecha || ticket.timestamp);
+  // Permitir reinicio de SLA si existe lastSlaStartAt (por reasignación/subcategoría nueva)
+  const createdMs = parseTimestamp(ticket.lastSlaStartAt) || parseTimestamp(ticket.createdAt || ticket.fecha || ticket.timestamp);
     if (!createdMs) return null;
 
   // Determinar SLA aplicable

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip, IconButton, Divider } from '@mui/material';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import SendIcon from '@mui/icons-material/Send';
 import AddIcon from '@mui/icons-material/Add';
@@ -49,6 +50,8 @@ export default function TicketPage() {
   const [loading, setLoading] = useState(true);
   // Estado para bloquear edición y evitar duplicados durante guardado
   const [saving, setSaving] = useState(false);
+  // Modo de reasignación (permitir a usuario asignado cambiar asignados y subcategoría)
+  const [reassignMode, setReassignMode] = useState(false);
 
   const [form, setForm] = useState({
   departamento: '', tipo: '', subcategoria: '', descripcion: '', estado: 'Abierto', usuario: '', usuarioEmail: '', adjuntoUrl: '', adjuntoNombre: '', asignados: [],
@@ -442,31 +445,140 @@ export default function TicketPage() {
             setError('No tienes permisos para modificar este ticket');
             return;
           }
-          // si es usuario asignado (no admin), solo permitir cambios en estado y resolución
+          // si es usuario asignado (no admin), permitir estado y (en modo reasignación) asignados/subcategoría
           if (!isAdmin && isAssignedPrev) {
             const allowedUpdate = {};
-            // permitir cambio de estado
-            allowedUpdate.estado = ticketData.estado || prev.estado || 'Abierto';
-            // Comentarios y adjuntos de resolución se manejan en la sección de Conversación; no actualizar aquí
-            // Si se cerró ahora, registrar metadata de resolución
-            if (allowedUpdate.estado === 'Cerrado' && prev.estado !== 'Cerrado') {
-              allowedUpdate.resueltoPorUid = user?.uid || '';
-              allowedUpdate.resueltoPorEmail = user?.email || '';
-              allowedUpdate.resueltoPorNombre = userData?.nombre ? `${userData.nombre} ${userData.apellido || ''}`.trim() : (user?.email || '');
-              allowedUpdate.resueltoEn = new Date().toISOString();
+            const changes = [];
+            if (ticketData.estado && ticketData.estado !== prev.estado) {
+              allowedUpdate.estado = ticketData.estado;
+              changes.push('estado');
+              if (ticketData.estado === 'Cerrado') {
+                allowedUpdate.resueltoPorUid = user?.uid || '';
+                allowedUpdate.resueltoPorEmail = user?.email || '';
+                allowedUpdate.resueltoPorNombre = userData?.nombre ? `${userData.nombre} ${userData.apellido || ''}`.trim() : (user?.email || '');
+                allowedUpdate.resueltoEn = new Date().toISOString();
+              }
             }
-            await update(dbRef(dbInstance, `tickets/${dbTicketId}`), allowedUpdate);
-            shouldNotify = (prev.estado !== allowedUpdate.estado);
+            if (reassignMode) {
+              const prevAsign = Array.isArray(prev.asignados) ? prev.asignados : [];
+              const newAsign = Array.isArray(ticketData.asignados) ? ticketData.asignados : [];
+              const asignChanged = JSON.stringify([...prevAsign].sort()) !== JSON.stringify([...newAsign].sort());
+              if (asignChanged) {
+                allowedUpdate.asignados = newAsign;
+                changes.push('asignados');
+              }
+              if (ticketData.subcategoria && ticketData.subcategoria !== prev.subcategoria) {
+                allowedUpdate.subcategoria = ticketData.subcategoria;
+                // Reiniciar inicio de SLA
+                allowedUpdate.lastSlaStartAt = Date.now();
+                changes.push('subcategoria');
+              }
+            }
+            if (Object.keys(allowedUpdate).length) {
+              await update(dbRef(dbInstance, `tickets/${dbTicketId}`), allowedUpdate);
+              shouldNotify = changes.length > 0;
+              if (reassignMode && (changes.includes('asignados') || changes.includes('subcategoria'))) {
+                try {
+                  await push(dbRef(dbInstance, `tickets/${dbTicketId}/reassignments`), {
+                    at: Date.now(),
+                    byUid: user?.uid || '',
+                    byEmail: user?.email || '',
+                    oldAssignees: prev.asignados || [],
+                    newAssignees: ticketData.asignados || [],
+                    oldSubcat: prev.subcategoria || '',
+                    newSubcat: ticketData.subcategoria || '',
+                  });
+                } catch (e) { console.warn('No se pudo registrar auditoría de reasignación', e); }
+                // Enviar correo de reasignación a nuevos asignados
+                try {
+                  const nuevos = (ticketData.asignados || []).filter(a => !(prev.asignados || []).includes(a));
+                  if (nuevos.length) {
+                    const resolvedEmails = nuevos.map(idu => {
+                      const u = usuarios.find(x => x.id === idu);
+                      return u ? u.email : null;
+                    }).filter(Boolean);
+                    if (resolvedEmails.length) {
+                      const depObj = departamentos.find(d => d.id === prev.departamento);
+                      const departamentoNombre = depObj ? depObj.nombre : prev.departamento;
+                      const baseUrl = window.location.origin;
+                      const ticketForHtml = { ...prev, ...allowedUpdate, ticketId: prev.codigo || dbTicketId, departamentoNombre };
+                      const resumenCambios = 'Ticket reasignado';
+                      let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
+                      const payload = buildSendMailPayload({
+                        ticket: { ...ticketForHtml, to: resolvedEmails },
+                        departamento: prev.departamento,
+                        departamentoNombre,
+                        subject: `[Reasignado] ${prev.tipo || ''} #${prev.codigo || dbTicketId}`,
+                        actionMsg: resumenCambios,
+                        htmlOverride: html,
+                        cc: [user?.email].filter(Boolean)
+                      });
+                      await sendTicketMail(payload);
+                    }
+                  }
+                } catch (e) { console.warn('No se pudo enviar correo de reasignación', e); }
+              }
+            }
             setSuccess('Ticket actualizado');
             ticketIdFinal = ticketData.codigo || dbTicketId;
+            if (reassignMode) setReassignMode(false);
           } else {
             // es admin -> puede actualizar cualquier campo
             const dbTicketId2 = ticketKey || id;
             const estadoChanged = (prev.estado !== ticketData.estado);
-            shouldNotify = estadoChanged;
+            const asignChanged = JSON.stringify([...(prev.asignados||[])].sort()) !== JSON.stringify([...(ticketData.asignados||[])].sort());
+            const subcatChanged = ticketData.subcategoria !== prev.subcategoria;
+            if (subcatChanged) {
+              ticketData.lastSlaStartAt = Date.now();
+            }
+            shouldNotify = estadoChanged || asignChanged || subcatChanged;
             await update(dbRef(dbInstance, `tickets/${dbTicketId2}`), ticketData);
+            if (asignChanged || subcatChanged) {
+              try {
+                await push(dbRef(dbInstance, `tickets/${dbTicketId2}/reassignments`), {
+                  at: Date.now(),
+                  byUid: user?.uid || '',
+                  byEmail: user?.email || '',
+                  oldAssignees: prev.asignados || [],
+                  newAssignees: ticketData.asignados || [],
+                  oldSubcat: prev.subcategoria || '',
+                  newSubcat: ticketData.subcategoria || '',
+                });
+              } catch (e) { console.warn('No se pudo registrar auditoría de reasignación (admin)', e); }
+              // correo para nuevos asignados
+              try {
+                if (asignChanged) {
+                  const nuevos = (ticketData.asignados || []).filter(a => !(prev.asignados || []).includes(a));
+                  if (nuevos.length) {
+                    const resolvedEmails = nuevos.map(idu => {
+                      const u = usuarios.find(x => x.id === idu);
+                      return u ? u.email : null;
+                    }).filter(Boolean);
+                    if (resolvedEmails.length) {
+                      const depObj = departamentos.find(d => d.id === prev.departamento);
+                      const departamentoNombre = depObj ? depObj.nombre : prev.departamento;
+                      const baseUrl = window.location.origin;
+                      const ticketForHtml = { ...prev, ...ticketData, ticketId: prev.codigo || dbTicketId2, departamentoNombre };
+                      const resumenCambios = 'Ticket reasignado';
+                      let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
+                      const payload = buildSendMailPayload({
+                        ticket: { ...ticketForHtml, to: resolvedEmails },
+                        departamento: prev.departamento,
+                        departamentoNombre,
+                        subject: `[Reasignado] ${prev.tipo || ''} #${prev.codigo || dbTicketId2}`,
+                        actionMsg: resumenCambios,
+                        htmlOverride: html,
+                        cc: [user?.email].filter(Boolean)
+                      });
+                      await sendTicketMail(payload);
+                    }
+                  }
+                }
+              } catch (e) { console.warn('No se pudo enviar correo de reasignación (admin)', e); }
+            }
             setSuccess('Ticket actualizado');
             ticketIdFinal = ticketData.codigo || dbTicketId2;
+            if (reassignMode) setReassignMode(false);
           }
         } catch (e) {
           console.warn('No se pudo leer ticket previo para chequeo de estado', e);
@@ -601,7 +713,7 @@ export default function TicketPage() {
               <MenuItem key={id} value={nombre}>{nombre}</MenuItem>
             ))}
           </TextField>
-          <TextField select label="Subcategoría" value={form.subcategoria} onChange={e => setForm({...form, subcategoria: e.target.value})} disabled={saving || (!isNew && !isAdmin)}>
+          <TextField select label="Subcategoría" value={form.subcategoria} onChange={e => setForm({...form, subcategoria: e.target.value})} disabled={saving || (!isNew && !isAdmin && !reassignMode)}>
             <MenuItem value="" disabled>Selecciona una subcategoría</MenuItem>
             {form.departamento && tipos && subcats[form.departamento] && form.tipo && (() => {
               const tipoKey = Object.entries(tipos[form.departamento] || {}).find(([, nombre]) => nombre === form.tipo)?.[0];
@@ -612,19 +724,34 @@ export default function TicketPage() {
           <Autocomplete
             multiple
             options={(() => {
-              // selected department id -> name
               const depName = (departamentos.find(d => String(d.id) === String(form.departamento)) || {}).nombre;
-              return usuarios.filter(u => {
-                // usuarios may store departamento as id or as name (legacy). Accept both.
-                return (u.departamento && (String(u.departamento) === String(form.departamento) || String(u.departamento) === String(depName)));
-              });
+              return usuarios.filter(u => (u.departamento && (String(u.departamento) === String(form.departamento) || String(u.departamento) === String(depName))));
             })()}
             getOptionLabel={opt => `${opt.nombre || ''} ${opt.apellido || ''}`.trim() || opt.email}
             value={usuarios.filter(u => (form.asignados || []).includes(u.id))}
             onChange={(_, newVal) => setForm(f => ({ ...f, asignados: newVal.map(u => u.id) }))}
-            disabled={saving || (!isNew && !isAdmin)}
+            disabled={saving || (!isNew && !isAdmin && !reassignMode)}
             renderInput={(params) => <TextField {...params} label="Asignar solicitud a: (múltiple)" />}
           />
+          {!isNew && (isAdmin || matchesAssignToUser(form, user)) && form.estado !== 'Cerrado' && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -1 }}>
+              <Tooltip title={reassignMode ? 'Cancelar reasignación' : 'Reasignar ticket (cambiar asignados / subcategoría)'} placement="left">
+                <span>
+                  <Button
+                    size="small"
+                    variant={reassignMode ? 'outlined' : 'contained'}
+                    color={reassignMode ? 'error' : 'secondary'}
+                    onClick={() => setReassignMode(m => !m)}
+                    startIcon={<SwapHorizIcon fontSize="small" />}
+                    disabled={saving}
+                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                  >
+                    {reassignMode ? 'Cancelar Reasignación' : 'Reasignar Ticket'}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
+          )}
           <TextField label="Descripción" multiline minRows={3} value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} disabled={saving || (!isNew && !isAdmin)} />
           <Box>
             <Button variant="outlined" component="label" disabled={saving || (!isNew && !isAdmin)}>{adjunto ? adjunto.name : (form.adjuntoNombre || 'Adjuntar archivo')}<input type="file" hidden onChange={e => setAdjunto(e.target.files[0])} /></Button>
@@ -756,6 +883,19 @@ export default function TicketPage() {
                         <Typography variant="body2">{new Date(p.start).toLocaleString()} → {p.end ? new Date(p.end).toLocaleString() : 'ACTIVA'}</Typography>
                         <Typography variant="caption" sx={{ ml: 1 }}>{p.reasonId || ''} {p.comment ? `- ${p.comment}` : ''}</Typography>
                       </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+              {/* Historial de Reasignaciones */}
+              {form.reassignments && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>Reasignaciones:</Typography>
+                  <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    {Object.values(form.reassignments).sort((a,b)=>(a.at||0)-(b.at||0)).map((r, idx) => (
+                      <Typography key={idx} variant="caption" sx={{ opacity: 0.8 }}>
+                        {r.at ? new Date(r.at).toLocaleString() : ''} | { (r.oldAssignees||[]).length } → { (r.newAssignees||[]).length } subcat: {r.oldSubcat || ''} ⇒ {r.newSubcat || ''}
+                      </Typography>
                     ))}
                   </Box>
                 </Box>

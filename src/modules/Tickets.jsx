@@ -123,12 +123,19 @@ export default function Tickets() {
     : viewTab === 'dept' ? deptTickets
     : allTickets;
 
+  const [nowTick, setNowTick] = useState(Date.now());
+  // Intervalo para refrescar SLA cada 60s
+  useEffect(() => {
+    const int = setInterval(() => setNowTick(Date.now()), 60000);
+    return () => clearInterval(int);
+  }, []);
+
   const ticketsTabla = (ticketsToRender || []).map(t => ({
     ...t,
-    // Guardamos el id original del departamento para cálculos SLA y mostramos el nombre amigable en la tabla
     _departamentoId: t.departamento,
     departamento: (departamentos.find(d => d.id === t.departamento)?.nombre) || t.departamento,
     _createdAt: t.createdAt || t.fecha || t.timestamp || null,
+    _forceSlaRecalcAt: nowTick, // campo fantasma para re-render de SLA
   }));
 
   // Estado y utilidades para la vista de tabla (filtro y contador de cerrados)

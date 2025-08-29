@@ -47,6 +47,7 @@ export default function Reportes() {
   const [subcats, setSubcats] = useState({});
   const [slaConfigs, setSlaConfigs] = useState({});
   const [slaSubcats, setSlaSubcats] = useState({});
+  const [usuariosMap, setUsuariosMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filtroDep, setFiltroDep] = useState('');
@@ -125,6 +126,48 @@ export default function Reportes() {
     return { name: depName, value: Math.round(avgHours * 100) / 100 };
   }).sort((a,b) => b.value - a.value);
 
+  // Promedio de cierre por usuario asignado (responsable). Si hay múltiples asignados se acredita a cada uno.
+  const userDurations = {};
+  const resolveUserLabel = (u) => {
+    if (!u) return '';
+    if (typeof u === 'object') return u.displayName || u.nombre || u.name || u.email || u.id || '';
+    if (typeof u === 'string') {
+      // si es id presente en usuariosMap
+      if (usuariosMap[u]) return usuariosMap[u].displayName || usuariosMap[u].nombre || usuariosMap[u].name || usuariosMap[u].email || u;
+      // buscar por email
+      if (u.includes('@')) {
+        const lower = u.toLowerCase();
+        for (const data of Object.values(usuariosMap)) {
+          if ((data?.email || '').toLowerCase() === lower) return data.displayName || data.nombre || data.name || data.email || lower;
+        }
+      }
+      return u;
+    }
+    return '';
+  };
+  const extractAssignedUsers = (t) => {
+    if (Array.isArray(t?.asignados) && t.asignados.length) {
+      return t.asignados.map(a => resolveUserLabel(a)).filter(Boolean);
+    }
+    return [];
+  };
+  ticketsFiltrados.forEach(t => {
+    const ms = computeTicketResolutionMs(t);
+    if (ms === null) return;
+    const assigned = extractAssignedUsers(t);
+    if (!assigned.length) return; // si no hay asignados, no se atribuye el tiempo
+    assigned.forEach(u => {
+      if (!userDurations[u]) userDurations[u] = { totalMs: 0, count: 0 };
+      userDurations[u].totalMs += ms;
+      userDurations[u].count += 1;
+    });
+  });
+  const avgByUser = Object.entries(userDurations).map(([userKey, v]) => {
+    const avgHours = v.count ? (v.totalMs / v.count) / (1000 * 60 * 60) : 0;
+    const label = resolveUserLabel(userKey) || userKey;
+    return { name: label, value: Math.round(avgHours * 100) / 100 };
+  }).sort((a,b)=> b.value - a.value).slice(0, 15); // limitar top 15 para legibilidad
+
   const ticketsPorEstado = estados.map(e => ({ name: e, value: ticketsFiltrados.filter(t => t.estado === e).length }));
   const ticketsPorDepartamento = departamentos.map(dep => ({ name: dep.nombre, value: ticketsFiltrados.filter(t => t.departamento === dep.id).length }));
 
@@ -190,22 +233,25 @@ export default function Reportes() {
 
         // SLA configurations
         try {
-          const [tiposSnap, subcatsSnap, slaConfigSnap, slaSubcatsSnap] = await Promise.all([
+          const [tiposSnap, subcatsSnap, slaConfigSnap, slaSubcatsSnap, usersSnap] = await Promise.all([
             get(ref(dbInstance, 'tiposTickets')),
             get(ref(dbInstance, 'subcategoriasTickets')),
             get(ref(dbInstance, 'sla/configs')),
-            get(ref(dbInstance, 'sla/subcategorias'))
+            get(ref(dbInstance, 'sla/subcategorias')),
+            get(ref(dbInstance, 'usuarios'))
           ]);
           setTipos(tiposSnap.exists() ? tiposSnap.val() : {});
           setSubcats(subcatsSnap.exists() ? subcatsSnap.val() : {});
           setSlaConfigs(slaConfigSnap.exists() ? slaConfigSnap.val() : {});
           setSlaSubcats(slaSubcatsSnap.exists() ? slaSubcatsSnap.val() : {});
+          setUsuariosMap(usersSnap.exists() ? usersSnap.val() : {});
         } catch (e) {
           console.warn('No se pudo cargar configuración SLA', e);
           setTipos({});
           setSubcats({});
           setSlaConfigs({});
           setSlaSubcats({});
+          setUsuariosMap({});
         }
       } catch {
         setError("Error al cargar los datos. Intenta de nuevo más tarde.");
@@ -354,7 +400,40 @@ export default function Reportes() {
       const url = params.value || row.adjuntoUrl || row.adjunto?.url || (Array.isArray(row.adjuntos) && row.adjuntos[0]?.url) || row.adjunto;
       return url ? <Button href={url} target="_blank" size="small" color="info" sx={{ fontWeight: 700 }}>Ver</Button> : '';
     } },
+    { field: 'asignadosTexto', headerName: 'Asignados', width: 220, renderCell: (params) => <span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{params.row?.asignadosTexto || ''}</span> },
+    { field: 'lastReassignAt', headerName: 'Última Reasignación', width: 180 },
   ];
+
+  // Pre-calcular campos derivados para evitar errores en valueGetter cuando params es indefinido
+  const enrichedTickets = React.useMemo(() => {
+    return ticketsFiltrados.map(t => {
+      let asignadosTexto = '';
+      let lastReassignAt = '';
+      // Solo mostrar asignados si existe historial de reasignaciones no vacío
+      if (t?.reassignments) {
+        try {
+          const arr = Object.values(t.reassignments).filter(Boolean);
+          if (arr.length) {
+            const maxAt = arr.reduce((m,o)=> (o?.at && o.at>m?o.at:m),0);
+            if (maxAt) lastReassignAt = new Date(maxAt).toLocaleString();
+            if (Array.isArray(t.asignados)) {
+              const list = t.asignados.map(a => {
+                if (!a) return '';
+                if (typeof a === 'string') return a;
+                if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
+                return '';
+              }).filter(Boolean);
+              const seen = new Set();
+              const dedup = [];
+              for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
+              asignadosTexto = dedup.join(', ');
+            }
+          }
+        } catch { /* noop */ }
+      }
+      return { ...t, asignadosTexto, lastReassignAt };
+    });
+  }, [ticketsFiltrados]);
 
   // Exportar a Excel
   const handleExportExcel = () => {
@@ -373,6 +452,55 @@ export default function Reportes() {
             slaText = `${totalHours}h`;
           }
         }
+        // Detalle de reasignaciones
+        let reasignacionesDetalle = '';
+        let asignadosTexto = '';
+        let lastReassignAt = '';
+        // Texto de asignados actuales
+        if (Array.isArray(t.asignados)) {
+          try {
+            const list = t.asignados.map(a => {
+              if (!a) return '';
+              if (typeof a === 'string') return a;
+              if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
+              return '';
+            }).filter(Boolean);
+            const seen = new Set();
+            const dedup = [];
+            for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
+            asignadosTexto = dedup.join(', ');
+          } catch { /* ignore */ }
+        }
+        if (t.reassignments) {
+          try {
+            const arr = Object.entries(t.reassignments).map(([k,v]) => ({ id: k, ...v })).filter(([,v]) => v).sort((a,b)=> ((a[1]?.at||0)-(b[1]?.at||0)));
+            if (arr.length) {
+              const last = arr[arr.length - 1][1];
+              lastReassignAt = last?.at ? new Date(last.at).toLocaleString() : '';
+              reasignacionesDetalle = arr.map(([,r]) => {
+                const when = r.at ? new Date(r.at).toLocaleString() : '';
+                return `${when} | ${r.oldAssignees?.length||0}->${r.newAssignees?.length||0} subcat: ${r.oldSubcat||''}=>${r.newSubcat||''}`;
+              }).join('\n');
+              // Solo ahora construir asignadosTexto
+              if (Array.isArray(t.asignados)) {
+                try {
+                  const list = t.asignados.map(a => {
+                    if (!a) return '';
+                    if (typeof a === 'string') return a;
+                    if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
+                    return '';
+                  }).filter(Boolean);
+                  const seen = new Set();
+                  const dedup = [];
+                  for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
+                  asignadosTexto = dedup.join(', ');
+                } catch { /* noop */ }
+              }
+            } else {
+              asignadosTexto = '';
+            }
+          } catch { asignadosTexto = ''; }
+        }
         
         return {
           descripcion: t.descripcion || '',
@@ -383,6 +511,9 @@ export default function Reportes() {
           usuario: t.usuario || '',
           fecha: resolveDateFromRow(t),
           adjunto: (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
+          asignados: asignadosTexto,
+          lastReassignAt,
+          reasignacionesDetalle,
         };
       });
       const ws = XLSX.utils.json_to_sheet(data);
@@ -443,7 +574,7 @@ export default function Reportes() {
       }
       chartsY += chartHeight + 30;
 
-      // Preparar datos tabla (sin ID, coincidente con la vista)
+      // Preparar datos tabla (sin ID, coincidente con la vista) + columnas de reasignaciones
         const bodyData = ticketsFiltrados.map(t => {
         const slaInfo = calculateSlaForTicket(t);
         let slaText = '-';
@@ -458,6 +589,44 @@ export default function Reportes() {
             slaText = `${totalHours}h`;
           }
         }
+        // Texto de asignados actuales
+        let asignadosTexto = '';
+        let lastReassignAt = '';
+        if (Array.isArray(t.asignados)) {
+          try {
+            const list = t.asignados.map(a => {
+              if (!a) return '';
+              if (typeof a === 'string') return a;
+              if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
+              return '';
+            }).filter(Boolean);
+            const seen = new Set();
+            const dedup = [];
+            for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
+            asignadosTexto = dedup.join(', ');
+          } catch { /* noop */ }
+        }
+        if (t.reassignments) {
+          try {
+            const arrR = Object.values(t.reassignments).filter(Boolean).sort((a,b)=> (a.at||0)-(b.at||0));
+            if (arrR.length) {
+              lastReassignAt = arrR[arrR.length-1].at ? new Date(arrR[arrR.length-1].at).toLocaleString() : '';
+              if (Array.isArray(t.asignados)) {
+                const list = t.asignados.map(a => {
+                  if (!a) return '';
+                  if (typeof a === 'string') return a;
+                  if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
+                  return '';
+                }).filter(Boolean);
+                const seen = new Set();
+                const dedup = [];
+                for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
+                asignadosTexto = dedup.join(', ');
+              }
+            }
+          } catch { /* ignore */ }
+        }
+        const hasAdj = (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) ? 'Sí' : '';
         
         return [
           t.descripcion || '',
@@ -467,6 +636,9 @@ export default function Reportes() {
           slaText,
           t.usuario || '',
           resolveDateFromRow(t),
+          hasAdj,
+          asignadosTexto,
+          lastReassignAt,
         ];
       });
 
@@ -474,7 +646,7 @@ export default function Reportes() {
         throw new Error('AutoTable plugin no disponible');
       }
       autoTable(doc, {
-        head: [['Descripción', 'Departamento', 'Tipo', 'Estado', 'SLA Restante', 'Usuario', 'Fecha']],
+        head: [['Descripción', 'Departamento', 'Tipo', 'Estado', 'SLA', 'Usuario', 'Fecha', 'Adjunto', 'Asignados', 'Últ. Reasig.']],
         body: bodyData,
         startY: chartsY,
         margin: { left: 40, right: 40 },
@@ -558,7 +730,7 @@ export default function Reportes() {
         ) : (
           <DataGridErrorBoundary>
             <DataGrid
-              rows={ticketsFiltrados}
+              rows={enrichedTickets}
               columns={columns}
               autoHeight
               pageSize={10}
@@ -649,10 +821,16 @@ export default function Reportes() {
       </Box>
 
       <Box sx={{ mt: 3 }}>
-        <Paper elevation={2} sx={{ p: 2, borderRadius: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tiempo promedio de cierre de Tickets por Departamento (horas)</Typography>
-          <ReportesBarChart data={avgByDept} title="Tiempo promedio (horas)" xKey="name" yKey="value" />
-        </Paper>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, mb: 3 }}>
+          <Paper elevation={2} sx={{ p: 2, borderRadius: 3, flex: 1 }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tiempo promedio de cierre de Tickets por Departamento (horas)</Typography>
+            <ReportesBarChart data={avgByDept} title="Tiempo promedio (horas)" xKey="name" yKey="value" />
+          </Paper>
+          <Paper elevation={2} sx={{ p: 2, borderRadius: 3, flex: 1 }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tiempo promedio de cierre de Tickets por Usuario (horas)</Typography>
+            <ReportesBarChart data={avgByUser} title="Tiempo promedio (horas)" xKey="name" yKey="value" />
+          </Paper>
+        </Box>
         <Paper elevation={2} sx={{ p: 2, borderRadius: 3 }}>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tickets mensuales (acumulado)</Typography>
           <ReportesAreaChart data={acumuladoMensual} title="Tickets mensuales (acumulado)" xKey="month" areas={[{ dataKey: 'total', color: '#1976d2' }]} />
