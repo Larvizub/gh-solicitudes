@@ -341,6 +341,46 @@ export default function Reportes() {
     return '';
   }, []);
 
+  // Resolver un elemento del array asignados (puede ser id, email, objeto parcial)
+  const resolveAssignedEntry = React.useCallback((entry) => {
+    if (!entry) return '';
+    // Si es objeto con datos ya legibles
+    if (typeof entry === 'object') {
+      // Si trae id y podemos ampliar desde usuariosMap, usamos el registro completo
+      const maybeId = entry.id || entry.uid || entry.key;
+      if (maybeId && usuariosMap[maybeId]) {
+        const u = usuariosMap[maybeId];
+        const full = `${u.nombre || ''} ${u.apellido || ''}`.trim();
+        return full || u.displayName || u.name || u.email || maybeId;
+      }
+      const full = `${entry.nombre || ''} ${entry.apellido || ''}`.trim();
+      return full || entry.displayName || entry.name || entry.email || entry.id || '';
+    }
+    // Si es string: puede ser id, email o ya un nombre
+    if (typeof entry === 'string') {
+      const val = entry.trim();
+      // Primero intentar id directo
+      if (usuariosMap[val]) {
+        const u = usuariosMap[val];
+        const full = `${u.nombre || ''} ${u.apellido || ''}`.trim();
+        return full || u.displayName || u.name || u.email || val;
+      }
+      // Si parece email, buscar por email
+      if (val.includes('@')) {
+        const lower = val.toLowerCase();
+        for (const [id, u] of Object.entries(usuariosMap)) {
+          if ((u.email || '').toLowerCase() === lower) {
+            const full = `${u.nombre || ''} ${u.apellido || ''}`.trim();
+            return full || u.displayName || u.name || u.email || id;
+          }
+        }
+      }
+      // Como fallback, devolver tal cual (podría ser un nombre ya)
+      return val;
+    }
+    return '';
+  }, [usuariosMap]);
+
   // Debug: mostrar el primer ticket y los valores resueltos en consola para diagnóstico UI
   React.useEffect(() => {
     if (tickets && tickets.length > 0) {
@@ -413,7 +453,6 @@ export default function Reportes() {
     return ticketsFiltrados.map(t => {
       let asignadosTexto = '';
       let lastReassignAt = '';
-      // Solo mostrar asignados si existe historial de reasignaciones no vacío
       if (t?.reassignments) {
         try {
           const arr = Object.values(t.reassignments).filter(Boolean);
@@ -421,12 +460,7 @@ export default function Reportes() {
             const maxAt = arr.reduce((m,o)=> (o?.at && o.at>m?o.at:m),0);
             if (maxAt) lastReassignAt = new Date(maxAt).toLocaleString();
             if (Array.isArray(t.asignados)) {
-              const list = t.asignados.map(a => {
-                if (!a) return '';
-                if (typeof a === 'string') return a;
-                if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
-                return '';
-              }).filter(Boolean);
+              const list = t.asignados.map(a => resolveAssignedEntry(a)).filter(Boolean);
               const seen = new Set();
               const dedup = [];
               for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
@@ -437,7 +471,7 @@ export default function Reportes() {
       }
       return { ...t, asignadosTexto, lastReassignAt };
     });
-  }, [ticketsFiltrados]);
+  }, [ticketsFiltrados, resolveAssignedEntry]);
 
   // Exportar a Excel
   const handleExportExcel = () => {
@@ -469,12 +503,7 @@ export default function Reportes() {
               const maxAt = arr.reduce((m,o)=> (o?.at && o.at>m?o.at:m),0);
               if (maxAt) lastReassignAt = new Date(maxAt).toLocaleString();
               if (Array.isArray(t.asignados)) {
-                const list = t.asignados.map(a => {
-                  if (!a) return '';
-                  if (typeof a === 'string') return a;
-                  if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
-                  return '';
-                }).filter(Boolean);
+                const list = t.asignados.map(a => resolveAssignedEntry(a)).filter(Boolean);
                 const seen = new Set();
                 const dedup = [];
                 for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
@@ -611,12 +640,7 @@ export default function Reportes() {
               const maxAt = arr.reduce((m,o)=> (o?.at && o.at>m?o.at:m),0);
               if (maxAt) lastReassignAt = new Date(maxAt).toLocaleString();
               if (Array.isArray(t.asignados)) {
-                const list = t.asignados.map(a => {
-                  if (!a) return '';
-                  if (typeof a === 'string') return a;
-                  if (typeof a === 'object') return a.email || a.displayName || a.nombre || a.name || a.id || '';
-                  return '';
-                }).filter(Boolean);
+                const list = t.asignados.map(a => resolveAssignedEntry(a)).filter(Boolean);
                 const seen = new Set();
                 const dedup = [];
                 for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
