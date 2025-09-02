@@ -420,16 +420,17 @@ export default function Perfil() {
               {ultimosTickets.map(t => (
     <ListItem key={t.id} sx={{ mb: 1, borderRadius: 2, background: theme => theme.palette.mode === 'dark' ? theme.palette.background.paper : '#f7f7f7', boxShadow: 0, border: theme => `1px solid ${theme.palette.divider}`, alignItems: 'flex-start' }}>
                   <ListItemText
-          primary={<Typography fontWeight={600} fontSize={15} sx={{ color: 'text.primary' }}>{t.descripcion}</Typography>}
-                    secondary={
-                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
-            <Chip size="small" label={t.estado} sx={{ fontWeight: 600, background: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined }} />
-                        <Typography variant="caption" color="text.secondary">
-                          {t.fecha ? new Date(t.fecha).toLocaleDateString() : ''}
-                        </Typography>
-                      </Box>
-                    }
-                  />
+              primary={<Typography fontWeight={600} fontSize={15} sx={{ color: 'text.primary' }}>{t.descripcion}</Typography>}
+                        secondary={
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
+                <Chip component="span" size="small" label={t.estado} sx={{ fontWeight: 600, background: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined }} />
+                            <Typography variant="caption" color="text.secondary" component="span">
+                              {t.fecha ? new Date(t.fecha).toLocaleDateString() : ''}
+                            </Typography>
+                          </Box>
+                        }
+                        secondaryTypographyProps={{ component: 'div' }}
+                      />
                 </ListItem>
               ))}
             </List>

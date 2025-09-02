@@ -323,7 +323,14 @@ export default function Tickets() {
           setDeptTickets(depts);
         }
       } catch (e) {
-        console.error('Error cargando tickets con consultas optimizadas', e);
+        // Algunos errores provienen de reglas de Realtime DB que requieren índices (.indexOn).
+        // Detectarlos y no elevar como error crítico; en su lugar hacemos un fallback a cargar todo.
+        const msg = (e && e.message) ? e.message : String(e);
+        if (msg.includes('Index not defined') || msg.includes('.indexOn') || msg.toLowerCase().includes('index')) {
+          console.warn('Consultas optimizadas no disponibles (faltan índices en Realtime DB). Cargando todos los tickets como fallback. Para optimizar, añade ".indexOn": ["asignadoA","usuarioEmail","departamento"] en las reglas para /tickets', e);
+        } else {
+          console.error('Error cargando tickets con consultas optimizadas', e);
+        }
         // fallback: cargar todo
         const ticketsSnap2 = await get(ref(dbInstance, 'tickets'));
         const all = ticketsSnap2.exists() ? Object.entries(ticketsSnap2.val()).map(([id, t]) => ({ id, ...t })) : [];
