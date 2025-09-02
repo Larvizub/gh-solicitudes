@@ -14,6 +14,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import ApartmentIcon from '@mui/icons-material/Apartment';
+import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 import SettingsIcon from '@mui/icons-material/Settings';
 import PeopleIcon from '@mui/icons-material/People';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
@@ -32,6 +33,7 @@ const adminItems = [
   { text: 'Motivos Pausa', icon: <ScheduleIcon />, path: '/pause-reasons' },
   { text: 'Usuarios', icon: <PeopleIcon />, path: '/usuarios' },
   { text: 'SLA', icon: <ScheduleIcon />, path: '/sla' },
+  { text: 'Acceso Corporativo', icon: <BusinessCenterIcon />, path: '/corporativo-access' },
   { text: 'Perfil', icon: <AccountCircleIcon />, path: '/perfil' },
 ];
 

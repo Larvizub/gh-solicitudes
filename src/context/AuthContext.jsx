@@ -89,24 +89,46 @@ export function AuthProvider({ children }) {
           }
         }
 
-        // Si no obtuvimos datos y hubo permission-denied, intentar otras bases en silencio
+        // Si no obtuvimos datos y hubo permission-denied, primero verificar si el usuario
+        // está autorizado en la base Corporativo (GRUPO_HEROICA). Si es así, permitir la sesión.
         if (!data && sawPermissionDenied) {
-          setDbAccessError('permission-denied');
-          const recintoKeys = Object.keys(RECINTO_DB_MAP || {});
-          for (const key of recintoKeys) {
-            try {
-              const otherDb = await (await import('../firebase/multiDb')).getDbForRecinto(key);
-              if (!otherDb) continue;
-              const snap = await get(ref(otherDb, `usuarios/${firebaseUser.uid}`));
-              if (snap && snap.exists()) {
-                data = snap.val();
-                // no cambiamos el recinto automáticamente, solo usamos los datos
-                break;
+          let foundCorpAuth = false;
+          try {
+            const { canAccessCorporativo } = await import('../utils/canAccessCorporativo');
+            const res = await canAccessCorporativo(firebaseUser.uid);
+            console.debug('AuthContext: canAccessCorporativo result ->', res);
+            if (res && res.authorized) {
+              data = {
+                nombre: (res.record && res.record.displayName) || firebaseUser.displayName || '',
+                email: (res.record && res.record.email) || firebaseUser.email || '',
+                corporativoAuthorized: true,
+                corporativoAuthRecord: res.record || null,
+                corporativoFoundIn: res.foundIn || 'unknown'
+              };
+              foundCorpAuth = true;
+            }
+          } catch (eCorp) {
+            console.debug('AuthContext: fallo comprobando autorización corporativa (helper)', eCorp && eCorp.message ? eCorp.message : eCorp);
+          }
+
+          if (!foundCorpAuth) {
+            setDbAccessError('permission-denied');
+            const recintoKeys = Object.keys(RECINTO_DB_MAP || {});
+            for (const key of recintoKeys) {
+              try {
+                const otherDb = await (await import('../firebase/multiDb')).getDbForRecinto(key);
+                if (!otherDb) continue;
+                const snap = await get(ref(otherDb, `usuarios/${firebaseUser.uid}`));
+                if (snap && snap.exists()) {
+                  data = snap.val();
+                  // no cambiamos el recinto automáticamente, solo usamos los datos
+                  break;
+                }
+              } catch (err) {
+                // Ignorar permission-denied u otros errores al inspeccionar otras DBs
+                const isPerm = err && (err.code?.includes('permission-denied') || String(err).toLowerCase().includes('permission denied'));
+                if (!isPerm) console.debug('AuthContext: error inspeccionando otras DBs', err && err.message ? err.message : err);
               }
-            } catch (err) {
-              // Ignorar permission-denied u otros errores al inspeccionar otras DBs
-              const isPerm = err && (err.code?.includes('permission-denied') || String(err).toLowerCase().includes('permission denied'));
-              if (!isPerm) console.debug('AuthContext: error inspeccionando otras DBs', err && err.message ? err.message : err);
             }
           }
         }

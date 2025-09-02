@@ -25,6 +25,7 @@ const ConfigSubcategorias = React.lazy(() => import('./modules/ConfigSubcategori
 const Perfil = React.lazy(() => import('./modules/Perfil'));
 const Sla = React.lazy(() => import('./modules/Sla'));
 const PauseReasons = React.lazy(() => import('./modules/PauseReasons'));
+const CorporativoAccess = React.lazy(() => import('./modules/CorporativoAccess'));
 
 
 import { useAuth } from './context/useAuth';
@@ -68,6 +69,7 @@ export default function App() {
                   {userRole === 'admin' && <Route path="/config-subcategorias" element={<ConfigSubcategorias />} />}
                   {userRole === 'admin' && <Route path="/usuarios" element={<Usuarios />} />}
                   {userRole === 'admin' && <Route path="/pause-reasons" element={<PauseReasons />} />}
+                  {userRole === 'admin' && <Route path="/corporativo-access" element={<CorporativoAccess />} />}
                   <Route path="/perfil" element={<Perfil />} />
                   <Route path="*" element={<Navigate to="/dashboard" />} />
                 </Route>
