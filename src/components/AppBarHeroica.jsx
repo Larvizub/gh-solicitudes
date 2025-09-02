@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BRAND_LABEL, BRAND_LOGO_ALT } from '../config/branding';
 import { useAuth } from '../context/useAuth';
 import { useNavigate } from 'react-router-dom';
 import Avatar from '@mui/material/Avatar';
@@ -30,7 +31,7 @@ export default function AppBarHeroica({ onMenuClick, onMiniToggle, isMini, recin
   // Formatea el nombre del recinto reemplazando guiones bajos por espacios
   const formattedRecinto = (recinto && typeof recinto === 'string')
     ? recinto.replace(/_/g, ' ')
-    : 'GRUPO HEROICA';
+  : BRAND_LABEL;
 
   return (
     <AppBar position="fixed" elevation={1}>
@@ -56,7 +57,7 @@ export default function AppBarHeroica({ onMenuClick, onMiniToggle, isMini, recin
         <Box
           component="img"
           src="https://costaricacc.com/cccr/Logoheroica.png"
-          alt="Logo Grupo Heroica"
+          alt={BRAND_LOGO_ALT}
           sx={{ height: 40, mr: 2, filter: 'brightness(0) invert(1)' }}
         />
         {/* espacio flexible entre logo y acciones */}

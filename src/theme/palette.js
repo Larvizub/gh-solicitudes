@@ -1,4 +1,4 @@
-// Paleta de colores corporativos Grupo Heroica
+// Paleta de colores corporativos - Corporativo
 export const heroicaPalette = {
   primary: {
     main: '#273c2a',

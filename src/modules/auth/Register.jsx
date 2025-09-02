@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Paper, Typography, TextField, Button, Link, MenuItem, Alert } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { BRAND_LOGO_ALT } from '../../config/branding';
 import { useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { ref, get, set } from 'firebase/database';
@@ -110,7 +111,7 @@ export default function Register() {
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
           <img
             src="https://costaricacc.com/cccr/Logoheroica.png"
-            alt="Logo Grupo Heroica"
+            alt={BRAND_LOGO_ALT}
             style={{
               height: 60,
               filter: theme && theme.palette && theme.palette.mode === 'dark' ? 'brightness(0) invert(1)' : 'none',

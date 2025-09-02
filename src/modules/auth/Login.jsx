@@ -6,6 +6,7 @@ import { Email, Lock, Microsoft } from '@mui/icons-material';
 import { signInWithEmailAndPassword, OAuthProvider, signInWithPopup, fetchSignInMethodsForEmail, signOut } from 'firebase/auth';
 import { auth } from '../../firebase/firebaseConfig';
 import { useDb } from '../../context/DbContext';
+import branding, { BRAND_LABEL, BRAND_LOGO_ALT } from '../../config/branding';
 import { getDbForRecinto } from '../../firebase/multiDb';
 import { ref, update } from 'firebase/database';
 
@@ -25,7 +26,7 @@ export default function Login() {
   const { setRecinto } = useDb();
   // Recintos soportados y dominios permitidos
   const RECINTOS = [
-    { key: 'GRUPO_HEROICA', label: 'Grupo Heroica' },
+  { key: branding.key, label: BRAND_LABEL },
     { key: 'CCCI', label: 'CCCI' },
     { key: 'CCCR', label: 'CCCR' },
     { key: 'CEVP', label: 'CEVP' },
@@ -306,7 +307,7 @@ export default function Login() {
         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
           <img
             src="https://costaricacc.com/cccr/Logoheroica.png"
-            alt="Logo Grupo Heroica"
+            alt={BRAND_LOGO_ALT}
             style={{
               height: 60,
               filter: theme && theme.palette && theme.palette.mode === 'dark' ? 'brightness(0) invert(1)' : 'none',
