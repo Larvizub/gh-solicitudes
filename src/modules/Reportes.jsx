@@ -463,11 +463,6 @@ export default function Reportes() {
     { field: 'departamento', headerName: 'Departamento', width: 160, renderCell: (params) => {
       return <span>{resolveDepartmentName(params?.row?.departamento)}</span>;
     } },
-    { field: 'tiempoLaboralMs', headerName: 'Horas cierre (h)', width: 160, renderCell: (params) => {
-      const ms = params.row && computeTicketElapsedMs(params.row);
-      const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
-      return <span>{hours !== null ? `${hours}h` : ''}</span>;
-    } },
     { field: 'tipo', headerName: 'Categoría', width: 120 },
     { field: 'estado', headerName: 'Estado', width: 120, renderCell: (params) => (
       <Chip label={params.value} size="small" color={params.value === 'Abierto' ? 'warning' : params.value === 'En Proceso' ? 'info' : 'success'} />
@@ -505,6 +500,11 @@ export default function Reportes() {
     { field: 'usuario', headerName: 'Usuario', width: 160 },
     { field: 'fecha', headerName: 'Fecha', width: 180, renderCell: (params) => {
       return <span>{resolveDateFromRow(params?.row)}</span>;
+    } },
+    { field: 'tiempoLaboralMs', headerName: 'Horas cierre (h)', width: 160, renderCell: (params) => {
+      const ms = params.row && computeTicketElapsedMs(params.row);
+      const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
+      return <span>{hours !== null ? `${hours}h` : ''}</span>;
     } },
     { field: 'adjuntoUrl', headerName: 'Adjunto', width: 120, renderCell: (params) => {
       const row = params?.row || {};
