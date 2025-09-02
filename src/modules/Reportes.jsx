@@ -30,7 +30,7 @@ import { getDbForRecinto } from '../firebase/multiDb';
 import { useAuth } from '../context/useAuth';
 import workingMsBetween from '../utils/businessHours';
 import { calculateSlaRemaining } from '../utils/slaCalculator';
-import { msToHoursMinutes } from '../utils/formatDuration';
+// (msToHoursMinutes removed — Reportes now shows decimal hours)
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -112,6 +112,36 @@ export default function Reportes() {
       return Math.max(0, duration);
     } catch (e) {
       console.warn('Error computing duration for ticket', e);
+      return null;
+    }
+  };
+
+  // Helper para parsear timestamps variados (reutilizable)
+  const parseAnyTimestamp = (v) => {
+    if (v === undefined || v === null) return null;
+    if (typeof v === 'number') return v < 1e12 ? v * 1000 : v;
+    if (typeof v === 'string') { const n = parseInt(v,10); if (!isNaN(n)) return n < 1e12 ? n*1000 : n; const d = new Date(v); return isNaN(d.getTime()) ? null : d.getTime(); }
+    if (typeof v === 'object') {
+      if (v.seconds) return Number(v.seconds) * 1000;
+      if (v._seconds) return Number(v._seconds) * 1000;
+      if (v.toMillis) {
+        try { return v.toMillis(); } catch { return null; }
+      }
+    }
+    return null;
+  };
+
+  // Tiempo transcurrido real entre creación y cierre (ms). Si no está cerrado devuelve null.
+  const computeTicketElapsedMs = (t) => {
+    try {
+      const createdCandidates = t.createdAt || t.fecha || t.timestamp || t.createdAtTimestamp || t.createdAtMillis || t.created;
+      const closedCandidates = t.closedAt || t.closedAtTimestamp || t.cerradoAt || t.fechaCierre || t.updatedAt || t.closedAtMillis;
+      const createdMs = parseAnyTimestamp(createdCandidates) || null;
+      const closedMs = parseAnyTimestamp(closedCandidates) || null;
+      if (!createdMs || !closedMs) return null;
+      const diff = Number(closedMs) - Number(createdMs);
+      return diff >= 0 ? diff : null;
+    } catch {
       return null;
     }
   };
@@ -433,9 +463,10 @@ export default function Reportes() {
     { field: 'departamento', headerName: 'Departamento', width: 160, renderCell: (params) => {
       return <span>{resolveDepartmentName(params?.row?.departamento)}</span>;
     } },
-    { field: 'tiempoLaboralMs', headerName: 'Tiempo (laboral)', width: 160, renderCell: (params) => {
-      const ms = params.row && computeTicketResolutionMs(params.row);
-      return <span>{ms !== null ? msToHoursMinutes(ms) : ''}</span>;
+    { field: 'tiempoLaboralMs', headerName: 'Horas cierre (h)', width: 160, renderCell: (params) => {
+      const ms = params.row && computeTicketElapsedMs(params.row);
+      const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
+      return <span>{hours !== null ? `${hours}h` : ''}</span>;
     } },
     { field: 'tipo', headerName: 'Categoría', width: 120 },
     { field: 'estado', headerName: 'Estado', width: 120, renderCell: (params) => (
@@ -526,9 +557,9 @@ export default function Reportes() {
             slaText = `${totalHours}h`;
           }
         }
-        // Tiempo laboral formateado igual que en la tabla
-        const ms = computeTicketResolutionMs(t);
-        const tiempoLaboral = ms !== null ? msToHoursMinutes(ms) : '';
+  // Tiempo hasta cierre en horas (decimal 1d) — consistente con la vista de la tabla
+  const ms = computeTicketElapsedMs(t);
+  const tiempoLaboral = (ms !== null && ms !== undefined) ? `${Math.round((ms / (1000 * 60 * 60)) * 10) / 10}h` : '';
         // Asignados solo si hay historial de reasignaciones con al menos 1 entrada
         let asignadosTexto = '';
         let lastReassignAt = '';
@@ -551,7 +582,7 @@ export default function Reportes() {
 
         return {
           'Departamento': resolveDepartmentName(t.departamento),
-          'Tiempo (laboral)': tiempoLaboral,
+          'Horas cierre (h)': tiempoLaboral,
           'Categoría': t.tipo || '',
           'Estado': t.estado || '',
           'SLA Restante': slaText,
@@ -663,9 +694,9 @@ export default function Reportes() {
             slaText = `${totalHours}h`;
           }
         }
-        // Tiempo laboral
-        const ms = computeTicketResolutionMs(t);
-        const tiempoLaboral = ms !== null ? msToHoursMinutes(ms) : '';
+  // Tiempo hasta cierre en horas (decimal 1d)
+  const ms = computeTicketElapsedMs(t);
+  const tiempoLaboral = (ms !== null && ms !== undefined) ? `${Math.round((ms / (1000 * 60 * 60)) * 10) / 10}h` : '';
         // Asignados y última reasignación (solo si hay historial)
         let asignadosTexto = '';
         let lastReassignAt = '';
@@ -703,8 +734,8 @@ export default function Reportes() {
       if (typeof autoTable !== 'function') {
         throw new Error('AutoTable plugin no disponible');
       }
-      autoTable(doc, {
-  head: [['Departamento', 'Tiempo (laboral)', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Fecha', 'Adjunto', 'Asignados', 'Última Reasignación']],
+    autoTable(doc, {
+  head: [['Departamento', 'Horas cierre (h)', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Fecha', 'Adjunto', 'Asignados', 'Última Reasignación']],
         body: bodyData,
         startY: cursorY,
         margin: { left: 40, right: 40 },
