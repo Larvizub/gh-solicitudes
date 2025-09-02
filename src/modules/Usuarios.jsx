@@ -14,11 +14,14 @@ import {
   MenuItem,
   Paper,
 } from '@mui/material';
+import Avatar from '@mui/material/Avatar';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { DataGrid } from '@mui/x-data-grid';
-import { ref, get, set, remove, update, push } from 'firebase/database';
+import { ref as dbRef, get, set, remove, update, push } from 'firebase/database';
+import { storage } from '../firebase/firebaseConfig';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/useAuth';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
@@ -33,13 +36,16 @@ export default function Usuarios() {
   const [form, setForm] = useState({ nombre: '', apellido: '', email: '', departamento: '', rol: 'estandar' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   // Cargar usuarios y departamentos
   useEffect(() => {
     const fetchData = async () => {
   // Usuarios
   const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
-  const snap = await get(ref(dbToUse, 'usuarios'));
+  const snap = await get(dbRef(dbToUse, 'usuarios'));
       if (snap.exists()) {
         const data = snap.val();
         setUsuarios(Object.entries(data).map(([id, u]) => ({ id, ...u })));
@@ -47,7 +53,7 @@ export default function Usuarios() {
         setUsuarios([]);
       }
       // Departamentos
-  const depSnap = await get(ref(dbToUse, 'departamentos'));
+  const depSnap = await get(dbRef(dbToUse, 'departamentos'));
       if (depSnap.exists()) {
         const data = depSnap.val();
         setDepartamentos(Object.values(data));
@@ -71,9 +77,13 @@ export default function Usuarios() {
         departamento: usuario.departamento || '',
         rol: usuario.rol || 'estandar',
       });
+  setPreviewUrl(usuario.photoURL || '');
+  setSelectedFile(null);
     } else {
       setEditId(null);
       setForm({ nombre: '', apellido: '', email: '', departamento: '', rol: 'estandar' });
+  setPreviewUrl('');
+  setSelectedFile(null);
     }
     setOpenDialog(true);
   };
@@ -85,18 +95,38 @@ export default function Usuarios() {
       return;
     }
     try {
+      const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
       if (editId) {
-  const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
-  await update(ref(dbToUse, `usuarios/${editId}`), form);
+  // Update existing user; upload photo first if provided
+  if (selectedFile) {
+    setUploading(true);
+    const sRef = storageRef(storage, `${recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA'}/usuarios/${editId}/${selectedFile.name}`);
+    await uploadBytes(sRef, selectedFile);
+    const url = await getDownloadURL(sRef);
+    await update(dbRef(dbToUse, `usuarios/${editId}`), { ...form, photoURL: url });
+    setUploading(false);
+  } else {
+    await update(dbRef(dbToUse, `usuarios/${editId}`), form);
+  }
         setSuccess('Usuario actualizado');
       } else {
-        // Solo admins pueden crear usuarios desde aquí
-  const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
-  const newRef = push(ref(dbToUse, 'usuarios'));
+        // Crear nuevo usuario
+  const newRef = push(dbRef(dbToUse, 'usuarios'));
   await set(newRef, form);
+  if (selectedFile) {
+    setUploading(true);
+    const id = newRef.key;
+    const sRef = storageRef(storage, `${recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA'}/usuarios/${id}/${selectedFile.name}`);
+    await uploadBytes(sRef, selectedFile);
+    const url = await getDownloadURL(sRef);
+    await update(dbRef(dbToUse, `usuarios/${id}`), { photoURL: url });
+    setUploading(false);
+  }
         setSuccess('Usuario agregado');
       }
       setOpenDialog(false);
+      setSelectedFile(null);
+      setPreviewUrl('');
     } catch {
       setError('Error al guardar');
     }
@@ -106,7 +136,7 @@ export default function Usuarios() {
   const handleDelete = async (id) => {
     try {
   const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
-  await remove(ref(dbToUse, `usuarios/${id}`));
+  await remove(dbRef(dbToUse, `usuarios/${id}`));
       setSuccess('Usuario eliminado');
     } catch {
       setError('Error al eliminar');
@@ -221,6 +251,21 @@ export default function Usuarios() {
             value={form.apellido}
             onChange={e => setForm(f => ({ ...f, apellido: e.target.value }))}
           />
+          {/* Foto de perfil */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1, mb: 1 }}>
+            <Avatar src={previewUrl} sx={{ width: 64, height: 64 }} />
+            <Button component="label" variant="outlined">
+              Seleccionar foto
+              <input hidden accept="image/*" type="file" onChange={(e) => {
+                const f = e.target.files && e.target.files[0];
+                if (f) {
+                  setSelectedFile(f);
+                  try { setPreviewUrl(URL.createObjectURL(f)); } catch { setPreviewUrl(''); }
+                }
+              }} />
+            </Button>
+            {uploading && <Typography variant="body2">Subiendo...</Typography>}
+          </Box>
           <TextField
             margin="dense"
             label="Correo"
