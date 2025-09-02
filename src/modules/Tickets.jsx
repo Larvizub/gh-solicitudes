@@ -16,6 +16,7 @@ import {
   TextField,
   MenuItem,
   Alert,
+  CircularProgress,
   Paper,
   Chip,
   Table,
@@ -60,6 +61,7 @@ export default function Tickets() {
   const [deptTickets, setDeptTickets] = useState([]);
   // tickets holds a superset (used for admin/all view)
   const [allTickets, setAllTickets] = useState([]);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
   const [viewTab, setViewTab] = useState('assigned');
   // archivo de resolución
   const [resAdjuntoFile, setResAdjuntoFile] = useState(null);
@@ -157,11 +159,14 @@ export default function Tickets() {
   }, [page, pageCount]);
   const pageTickets = filteredTickets.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // loader UI will be rendered inside the main JSX to avoid conditional hooks
+
   // Cargar departamentos, tipos y tickets
   useEffect(() => {
     const fetchData = async () => {
       // Si el contexto aún está inicializando y no tenemos db, esperar al siguiente ciclo
       if (dbLoading && !ctxDb) return;
+      setTicketsLoading(true);
       const dbInstance = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
 
       // Departamentos
@@ -322,7 +327,7 @@ export default function Tickets() {
           setCreatedTickets(created);
           setDeptTickets(depts);
         }
-      } catch (e) {
+  } catch (e) {
         // Algunos errores provienen de reglas de Realtime DB que requieren índices (.indexOn).
         // Detectarlos y no elevar como error crítico; en su lugar hacemos un fallback a cargar todo.
         const msg = (e && e.message) ? e.message : String(e);
@@ -340,6 +345,8 @@ export default function Tickets() {
         setDeptTickets(all.filter(t => {
           try { return matchesUserDept(t.departamento); } catch { return false; }
         }));
+      } finally {
+        setTicketsLoading(false);
       }
     };
     fetchData();
@@ -655,19 +662,28 @@ export default function Tickets() {
         </Alert>
       )}
       <Box sx={{ flex: '0 0 auto', width: '100%', maxWidth: '100vw' }}>
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
-            gap: { xs: 2, sm: 3 },
-            width: '100%',
-            justifyContent: { xs: 'flex-start', sm: 'space-between' },
-            alignItems: { xs: 'flex-start', sm: 'stretch' },
-            mb: 3,
-            overflowX: 'visible',
-            WebkitOverflowScrolling: 'touch',
-          }}
-        >
+        {ticketsLoading ? (
+          <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh', width: '100%' }}>
+            <Paper elevation={3} sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, borderRadius: 3 }}>
+              <CircularProgress />
+              <Typography variant="body1">Cargando tickets, por favor espera...</Typography>
+            </Paper>
+          </Box>
+        ) : (
+          <>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: { xs: 2, sm: 3 },
+              width: '100%',
+              justifyContent: { xs: 'flex-start', sm: 'space-between' },
+              alignItems: { xs: 'flex-start', sm: 'stretch' },
+              mb: 3,
+              overflowX: 'visible',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
           {ticketsPorEstado.map(col => (
             <Box
               key={col.key}
@@ -903,6 +919,8 @@ export default function Tickets() {
             <Pagination count={pageCount} page={page} onChange={(e, val) => setPage(val)} color="primary" />
           </Box>
         </Paper>
+          </>
+        )}
       </Box>
 
   <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 4, boxShadow: 8 } }}>

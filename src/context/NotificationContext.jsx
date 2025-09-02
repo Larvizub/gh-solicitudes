@@ -8,15 +8,6 @@ import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 
 const NotificationContext = createContext();
-
-/**
- * notify(message, severity = 'success', options = {})
- * options: {
- *   mode: 'toast' | 'modal'  // how to show the notification
- *   duration: number         // ms for autoHide (toast only)
- *   persist: boolean         // if true, toast won't auto-hide
- * }
- */
 function NotificationProvider({ children }) {
   // Toast (Snackbar) state
   const [toastOpen, setToastOpen] = useState(false);
