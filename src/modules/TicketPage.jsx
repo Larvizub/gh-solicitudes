@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import useNotification from '../context/useNotification';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip, IconButton, Divider, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
@@ -38,10 +39,18 @@ export default function TicketPage() {
   const { db: ctxDb, recinto, loading: dbLoading, tiposTickets: tiposFromCtx, subcategoriasTickets: subcatsFromCtx } = useDb();
 
   const [departamentos, setDepartamentos] = useState([]);
+  const notify = useNotification();
   const [tipos, setTipos] = useState({});
   const [subcats, setSubcats] = useState({});
   const [usuarios, setUsuarios] = useState([]);
   const [error, setError] = useState('');
+  // Propagar errores locales al sistema de notificaciones global y limpiar
+  React.useEffect(() => {
+    if (error) {
+      try { notify(error, 'error', { mode: 'toast', persist: true }); } catch { /* ignore */ }
+      setError('');
+    }
+  }, [error, notify]);
   const [adjunto, setAdjunto] = useState(null);
   const [commentsArr, setCommentsArr] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -380,7 +389,7 @@ export default function TicketPage() {
   const handleSave = async () => {
     if (saving) return; // prevenir doble click
     if (!form.departamento || !form.tipo || !form.subcategoria || !form.descripcion.trim()) {
-      setError('Todos los campos son obligatorios');
+      try { notify('Todos los campos son obligatorios', 'error', { mode: 'toast', persist: true }); } catch { setError('Todos los campos son obligatorios'); }
       return;
     }
     setError('');

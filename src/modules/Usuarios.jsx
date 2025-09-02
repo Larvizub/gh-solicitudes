@@ -24,6 +24,7 @@ import { storage } from '../firebase/firebaseConfig';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/useAuth';
 import { useDb } from '../context/DbContext';
+import useNotification from '../context/useNotification';
 import { getDbForRecinto } from '../firebase/multiDb';
 
 export default function Usuarios() {
@@ -39,6 +40,18 @@ export default function Usuarios() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+  const notify = useNotification();
+
+  React.useEffect(() => {
+    if (error) {
+      try { notify(error, 'error', { mode: 'toast', persist: true }); } catch { /* ignore */ }
+      setError('');
+    }
+    if (success) {
+      try { notify(success, 'success', { mode: 'toast' }); } catch { /* ignore */ }
+      setSuccess('');
+    }
+  }, [error, success, notify]);
 
   // Cargar usuarios y departamentos
   useEffect(() => {
@@ -91,7 +104,7 @@ export default function Usuarios() {
   // Guardar usuario (crear o editar)
   const handleSave = async () => {
     if (!form.nombre.trim() || !form.apellido.trim() || !form.email.trim() || !form.departamento.trim()) {
-      setError('Todos los campos son obligatorios');
+  try { notify('Todos los campos son obligatorios', 'error', { mode: 'toast', persist: true }); } catch { setError('Todos los campos son obligatorios'); }
       return;
     }
     try {

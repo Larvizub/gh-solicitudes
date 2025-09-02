@@ -40,10 +40,12 @@ import { storage } from "../firebase/firebaseConfig";
 import { getDbForRecinto } from '../firebase/multiDb';
 import { useDb } from '../context/DbContext';
 import { useAuth } from "../context/useAuth";
+import useNotification from '../context/useNotification';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export default function Tickets() {
   const { user, userData } = useAuth();
+  const notify = useNotification();
   const { db: ctxDb, recinto, loading: dbLoading, tiposTickets: tiposFromCtx, subcategoriasTickets: subcatsFromCtx } = useDb();
   const [departamentos, setDepartamentos] = useState([]);
   const [tipos, setTipos] = useState({});
@@ -336,6 +338,17 @@ export default function Tickets() {
     fetchData();
   }, [success, ctxDb, recinto, userData, isAdmin, dbLoading, user, tiposFromCtx, subcatsFromCtx]);
 
+  React.useEffect(() => {
+    if (error) {
+      try { notify(error, 'error', { mode: 'toast', persist: true }); } catch { /* ignore */ }
+      setError('');
+    }
+    if (success) {
+      try { notify(success, 'success', { mode: 'toast' }); } catch { /* ignore */ }
+      setSuccess('');
+    }
+  }, [error, success, notify]);
+
 
 
   // Abrir diálogo para agregar/editar ticket
@@ -352,7 +365,7 @@ export default function Tickets() {
   // Guardar ticket
   const handleSaveTicket = async () => {
     if (!form.departamento || !form.tipo || !form.subcategoria || !form.descripcion.trim()) {
-      setError("Todos los campos son obligatorios");
+      try { notify('Todos los campos son obligatorios', 'error', { mode: 'toast', persist: true }); } catch { setError('Todos los campos son obligatorios'); }
       return;
     }
     try {

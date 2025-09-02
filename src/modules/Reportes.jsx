@@ -27,6 +27,7 @@ import { DataGrid } from '@mui/x-data-grid';
 import { ref, get } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
+import { useAuth } from '../context/useAuth';
 import workingMsBetween from '../utils/businessHours';
 import { calculateSlaRemaining } from '../utils/slaCalculator';
 import { msToHoursMinutes } from '../utils/formatDuration';
@@ -45,6 +46,7 @@ export default function Reportes() {
   const avgUserRef = useRef();
   const monthlyRef = useRef();
   const { db: ctxDb, recinto } = useDb();
+  const { userData } = useAuth();
   const [tickets, setTickets] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
   // SLA configuration states
@@ -231,7 +233,41 @@ export default function Reportes() {
         // Tickets
   const ticketsSnap = await get(ref(dbInstance, 'tickets'));
         if (ticketsSnap.exists()) {
-          setTickets(Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t })));
+          const all = Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t }));
+          // Si el usuario NO es admin, filtrar tickets a los del/los departamento(s) del usuario
+          const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
+          if (!isAdmin) {
+            const userDeptRaw = (userData?.departamento || '').toString().trim();
+            const matchedDep = userDeptRaw ? deps.find(d => String(d.nombre).toLowerCase() === String(userDeptRaw).toLowerCase() || String(d.id) === String(userDeptRaw)) : null;
+            const userDeptCandidates = new Set([userDeptRaw, matchedDep?.id, matchedDep?.nombre].filter(Boolean));
+            const matchesUserDept = (ticketDept) => {
+              if (!userDeptCandidates.size) return false;
+              if (!ticketDept) return false;
+              if (userDeptCandidates.has(ticketDept)) return true;
+              if (typeof ticketDept === 'string') {
+                if (ticketDept.includes('/')) {
+                  const last = ticketDept.split('/').filter(Boolean).pop();
+                  if (last && userDeptCandidates.has(last)) return true;
+                }
+                const depByName = deps.find(d => d.nombre === ticketDept);
+                if (depByName && (userDeptCandidates.has(depByName.id) || userDeptCandidates.has(depByName.nombre))) return true;
+              }
+              if (typeof ticketDept === 'object') {
+                const candId = ticketDept.id || ticketDept.key || ticketDept.value;
+                if (candId && userDeptCandidates.has(candId)) return true;
+                const candName = ticketDept.nombre || ticketDept.name || ticketDept.label;
+                if (candName && userDeptCandidates.has(candName)) return true;
+                if (candName) {
+                  const depByName = deps.find(d => d.nombre === candName);
+                  if (depByName && userDeptCandidates.has(depByName.id)) return true;
+                }
+              }
+              return false;
+            };
+            setTickets(all.filter(t => matchesUserDept(t.departamento)));
+          } else {
+            setTickets(all);
+          }
         } else {
           setTickets([]);
         }
@@ -265,7 +301,7 @@ export default function Reportes() {
       }
     };
     fetchData();
-  }, [ctxDb, recinto]);
+  }, [ctxDb, recinto, userData]);
 
   // Helper para calcular SLA usando la función utilitaria
   const calculateSlaForTicket = (ticket) => {
