@@ -436,7 +436,17 @@ export default function TicketPage() {
         }
   const newRef = push(dbRef(dbInstance, 'tickets'));
         if (seq) {
-          ticketData.codigo = `${recintoKey}-${padNum(seq, 4)}`;
+          // Construir código por recinto; para CORPORATIVO usamos prefijo CORP
+          const buildTicketCode = (recKey, sequence) => {
+            if (!recKey) return `T-${newRef.key.substring(0,6)}`;
+            // Si el recinto es CORPORATIVO (o mapeado), usar CORP-0001
+            if (recKey === 'CORPORATIVO' || recKey === 'CORPORATIVO'.toString()) {
+              return `CORP-${padNum(sequence, 4)}`;
+            }
+            // por defecto mantener formato RECINTO-0001
+            return `${recKey}-${padNum(sequence, 4)}`;
+          };
+          ticketData.codigo = buildTicketCode(recintoKey, seq);
         } else {
           // fallback: usar parte de key
           ticketData.codigo = `T-${newRef.key.substring(0,6)}`;

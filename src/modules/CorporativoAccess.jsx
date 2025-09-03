@@ -11,7 +11,7 @@ import { useDb } from '../context/DbContext';
 
 // Módulo para gestionar autorizaciones de usuarios de recintos a la base Corporate
 export default function CorporativoAccess() {
-  const { user, userData } = useAuth();
+  const { userData } = useAuth();
   const { recinto: currentRecinto } = useDb();
   // Determinar recinto del usuario: preferir userData.recinto si está disponible;
   // en caso contrario usar el recinto actual del contexto o el guardado en localStorage.
@@ -171,22 +171,7 @@ export default function CorporativoAccess() {
             <Stack direction="row" spacing={1} justifyContent="flex-end">
               <Button variant="contained" onClick={fetchSourceUsers} disabled={loadingSource}>Cargar usuarios</Button>
               <Button variant="outlined" onClick={fetchAuthorized} disabled={loadingAuth}>Refrescar</Button>
-              <Button variant="text" onClick={async () => {
-                const uidToCheck = selectedIds.size === 1 ? Array.from(selectedIds)[0] : (user?.uid || null);
-                if (!uidToCheck) return setSnackbar({ open: true, message: 'Selecciona 1 usuario o inicia sesión', severity: 'warning' });
-                try {
-                  const { default: canAccessCorporativo } = await import('../utils/canAccessCorporativo');
-                  const res = await canAccessCorporativo(uidToCheck);
-                  if (res && res.authorized) {
-                    setSnackbar({ open: true, message: `UID ${uidToCheck} AUTORIZADO en ${res.foundIn}`, severity: 'success' });
-                  } else {
-                    setSnackbar({ open: true, message: `UID ${uidToCheck} NO autorizado en ninguna DB`, severity: 'error' });
-                  }
-                } catch (err) {
-                  console.error('Diagnóstico corporativo falló', err);
-                  setSnackbar({ open: true, message: 'Error diagnóstico (revisa consola)', severity: 'error' });
-                }
-              }}>Diagnosticar</Button>
+              {/* Diagnosticar button removed as requested */}
             </Stack>
           </Grid>
         </Grid>
