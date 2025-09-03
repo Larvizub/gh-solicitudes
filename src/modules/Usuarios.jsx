@@ -13,11 +13,13 @@ import {
   Alert,
   MenuItem,
   Paper,
+  CircularProgress,
 } from '@mui/material';
 import Avatar from '@mui/material/Avatar';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { DataGrid } from '@mui/x-data-grid';
 import { ref as dbRef, get, set, remove, update, push } from 'firebase/database';
 import { storage } from '../firebase/firebaseConfig';
@@ -32,6 +34,7 @@ export default function Usuarios() {
   const { db: ctxDb, recinto } = useDb();
   const [usuarios, setUsuarios] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ nombre: '', apellido: '', email: '', departamento: '', rol: 'estandar' });
@@ -54,11 +57,13 @@ export default function Usuarios() {
   }, [error, success, notify]);
 
   // Cargar usuarios y departamentos
-  useEffect(() => {
-    const fetchData = async () => {
-  // Usuarios
-  const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
-  const snap = await get(dbRef(dbToUse, 'usuarios'));
+  // Reusable fetch function so UI can trigger refresh
+  const fetchData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      // Usuarios
+      const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+      const snap = await get(dbRef(dbToUse, 'usuarios'));
       if (snap.exists()) {
         const data = snap.val();
         setUsuarios(Object.entries(data).map(([id, u]) => ({ id, ...u })));
@@ -66,16 +71,28 @@ export default function Usuarios() {
         setUsuarios([]);
       }
       // Departamentos
-  const depSnap = await get(dbRef(dbToUse, 'departamentos'));
+      const depSnap = await get(dbRef(dbToUse, 'departamentos'));
       if (depSnap.exists()) {
         const data = depSnap.val();
         setDepartamentos(Object.values(data));
       } else {
         setDepartamentos([]);
       }
-    };
+    } catch (err) {
+      setError(err?.message || 'Error cargando usuarios');
+    } finally {
+      setLoading(false);
+    }
+  }, [ctxDb, recinto]);
+
+  useEffect(() => {
     fetchData();
-  }, [success, ctxDb, recinto]);
+    // re-run when success (after create/delete) or when fetchData changes
+  }, [success, fetchData]);
+
+  const handleRefresh = () => {
+    fetchData();
+  };
 
   // Abrir diálogo para agregar/editar
   const handleOpenDialog = (usuario = null) => {
@@ -202,16 +219,26 @@ export default function Usuarios() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       <Paper elevation={1} sx={{ p: 2, borderRadius: 3, boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)', mb: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1, gap: 1 }}>
           {userData?.rol === 'admin' && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => handleOpenDialog()}
-              sx={{ borderRadius: 2, fontWeight: 500, bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined, '& .MuiSvgIcon-root': { color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : 'inherit' } }}
-            >
-              Agregar
-            </Button>
+            <>
+              <Button
+                variant="outlined"
+                startIcon={loading ? <CircularProgress size={18} /> : <RefreshIcon />}
+                onClick={handleRefresh}
+                sx={{ borderRadius: 2, fontWeight: 500 }}
+              >
+                Refrescar
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => handleOpenDialog()}
+                sx={{ borderRadius: 2, fontWeight: 500, bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined, '& .MuiSvgIcon-root': { color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : 'inherit' } }}
+              >
+                Agregar
+              </Button>
+            </>
           )}
         </Box>
           <DataGrid
