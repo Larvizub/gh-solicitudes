@@ -34,7 +34,7 @@ export default function Usuarios() {
   const { db: ctxDb, recinto } = useDb();
   const [usuarios, setUsuarios] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // Se agrega el botón de refrescar
   const [openDialog, setOpenDialog] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ nombre: '', apellido: '', email: '', departamento: '', rol: 'estandar' });
