@@ -15,7 +15,7 @@ export default function Register() {
   const theme = useTheme();
   const { recinto, RECINTO_DB_MAP } = useDb();
   const navigate = useNavigate();
-  const [targetRecinto, setTargetRecinto] = useState(() => recinto || 'GRUPO_HEROICA');
+  const [targetRecinto, setTargetRecinto] = useState(() => recinto || 'CORPORATIVO');
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [email, setEmail] = useState('');
@@ -46,6 +46,20 @@ export default function Register() {
     };
     fetchDepartamentos();
   }, [targetRecinto]);
+
+    // Construir lista de opciones para el select de recintos: quitar GRUPO_HEROICA y poner CORPORATIVO primero
+    const recintoOptions = (() => {
+      const keys = Object.keys(RECINTO_DB_MAP || {});
+      // excluir GRUPO_HEROICA
+      const filtered = keys.filter(k => k !== 'GRUPO_HEROICA');
+      // ordenar poniendo CORPORATIVO al inicio si existe
+      filtered.sort((a, b) => {
+        if (a === 'CORPORATIVO') return -1;
+        if (b === 'CORPORATIVO') return 1;
+        return String(a).localeCompare(String(b));
+      });
+      return filtered;
+    })();
 
   // Registro de usuario
   const handleRegister = async (e) => {
@@ -173,7 +187,7 @@ export default function Register() {
             onChange={e => setTargetRecinto(e.target.value)}
             required
           >
-            {Object.keys(RECINTO_DB_MAP || {}).map((key) => (
+            {recintoOptions.map((key) => (
               <MenuItem key={key} value={key}>{key}</MenuItem>
             ))}
           </TextField>
