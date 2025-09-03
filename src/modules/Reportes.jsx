@@ -543,7 +543,7 @@ export default function Reportes() {
   // Exportar a Excel
   const handleExportExcel = () => {
     try {
-      const data = ticketsFiltrados.map(t => {
+    const data = ticketsFiltrados.map(t => {
         const slaInfo = calculateSlaForTicket(t);
         let slaText = '-';
         if (slaInfo) {
@@ -580,20 +580,39 @@ export default function Reportes() {
           } catch { /* noop */ }
         }
 
+        // Return object (not relied on for column order). We'll build sheet with explicit column order below.
         return {
           'Departamento': resolveDepartmentName(t.departamento),
-          'Horas cierre (h)': tiempoLaboral,
           'Categoría': t.tipo || '',
           'Estado': t.estado || '',
           'SLA Restante': slaText,
           'Usuario': t.usuario || '',
           'Fecha': resolveDateFromRow(t),
+          'Horas cierre (h)': tiempoLaboral,
           'Adjunto': (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
           'Asignados': asignadosTexto,
           'Última Reasignación': lastReassignAt,
         };
       });
-      const ws = XLSX.utils.json_to_sheet(data, { skipHeader: false });
+      // Build an array-of-arrays (AOA) to guarantee column order matches the DataGrid table
+      const headers = ['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación'];
+  // Build rows explicitly to guarantee column order matches the DataGrid table
+  const rows = [headers];
+      data.forEach(d => {
+        rows.push([
+          d['Departamento'] || '',
+          d['Categoría'] || '',
+          d['Estado'] || '',
+          d['SLA Restante'] || '',
+          d['Usuario'] || '',
+          d['Fecha'] || '',
+          d['Horas cierre (h)'] || '',
+          d['Adjunto'] || '',
+          d['Asignados'] || '',
+          d['Última Reasignación'] || ''
+        ]);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Tickets');
       const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -680,7 +699,7 @@ export default function Reportes() {
       await addChartSingle(monthlyRef);
 
       // Preparar datos tabla (sin ID, coincidente con la vista) + columnas de reasignaciones
-        const bodyData = ticketsFiltrados.map(t => {
+    const bodyData = ticketsFiltrados.map(t => {
         const slaInfo = calculateSlaForTicket(t);
         let slaText = '-';
         if (slaInfo) {
@@ -717,14 +736,15 @@ export default function Reportes() {
           } catch { /* noop */ }
         }
         const hasAdj = (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) ? 'Sí' : '';
+        // Order must match DataGrid columns: Departamento, Categoría, Estado, SLA Restante, Usuario, Fecha, Horas cierre (h), Adjunto, Asignados, Última Reasignación
         return [
           resolveDepartmentName(t.departamento),
-          tiempoLaboral,
           t.tipo || '',
           t.estado || '',
           slaText,
           t.usuario || '',
           resolveDateFromRow(t),
+          tiempoLaboral,
           hasAdj,
           asignadosTexto,
           lastReassignAt,
@@ -735,7 +755,7 @@ export default function Reportes() {
         throw new Error('AutoTable plugin no disponible');
       }
     autoTable(doc, {
-  head: [['Departamento', 'Horas cierre (h)', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Fecha', 'Adjunto', 'Asignados', 'Última Reasignación']],
+  head: [['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación']],
         body: bodyData,
         startY: cursorY,
         margin: { left: 40, right: 40 },
