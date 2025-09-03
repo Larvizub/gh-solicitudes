@@ -3,7 +3,7 @@ import { getDatabase } from 'firebase/database';
 
 // Mapeo de recintos a URLs de Realtime Database
 const RECINTO_DB_URLS = {
-  GRUPO_HEROICA: import.meta.env.VITE_FIREBASE_DATABASE_URL_GRUPO_HEROICA,
+  GRUPO_HEROICA: import.meta.env.VITE_FIREBASE_DATABASE_URL_GRUPO_HEROICA, // Se deja como está en caso de crear un error en cascada
   CCCI: import.meta.env.VITE_FIREBASE_DATABASE_URL_CCCI,
   CCCR: import.meta.env.VITE_FIREBASE_DATABASE_URL_CCCR,
   CEVP: import.meta.env.VITE_FIREBASE_DATABASE_URL_CEVP,
