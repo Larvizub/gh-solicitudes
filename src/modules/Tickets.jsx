@@ -828,7 +828,7 @@ export default function Tickets() {
                   <TableCell sx={{ fontWeight: 700 }}>Subcategoría</TableCell>
                     {/* Columna Descripción eliminada para evitar textos largos que rompan el layout */}
                   <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
-                  <TableCell sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>SLA Restante</TableCell>
+                  <TableCell sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>Vencimiento</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Usuario</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Adjunto</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>

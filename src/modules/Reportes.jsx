@@ -467,7 +467,7 @@ export default function Reportes() {
     { field: 'estado', headerName: 'Estado', width: 120, renderCell: (params) => (
       <Chip label={params.value} size="small" color={params.value === 'Abierto' ? 'warning' : params.value === 'En Proceso' ? 'info' : 'success'} />
     ) },
-    { field: 'slaRestante', headerName: 'SLA Restante', width: 140, renderCell: (params) => {
+  { field: 'slaRestante', headerName: 'Vencimiento', width: 140, renderCell: (params) => {
       const slaInfo = calculateSlaForTicket(params.row);
       if (!slaInfo) return <span>-</span>;
       
@@ -595,7 +595,7 @@ export default function Reportes() {
         };
       });
       // Build an array-of-arrays (AOA) to guarantee column order matches the DataGrid table
-      const headers = ['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación'];
+    const headers = ['Departamento', 'Categoría', 'Estado', 'Vencimiento', 'Usuario', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación'];
   // Build rows explicitly to guarantee column order matches the DataGrid table
   const rows = [headers];
       data.forEach(d => {
@@ -736,7 +736,7 @@ export default function Reportes() {
           } catch { /* noop */ }
         }
         const hasAdj = (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) ? 'Sí' : '';
-        // Order must match DataGrid columns: Departamento, Categoría, Estado, SLA Restante, Usuario, Fecha, Horas cierre (h), Adjunto, Asignados, Última Reasignación
+  // Order must match DataGrid columns: Departamento, Categoría, Estado, Vencimiento, Usuario, Fecha, Horas cierre (h), Adjunto, Asignados, Última Reasignación
         return [
           resolveDepartmentName(t.departamento),
           t.tipo || '',
@@ -755,7 +755,7 @@ export default function Reportes() {
         throw new Error('AutoTable plugin no disponible');
       }
     autoTable(doc, {
-  head: [['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación']],
+  head: [['Departamento', 'Categoría', 'Estado', 'Vencimiento', 'Usuario', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación']],
         body: bodyData,
         startY: cursorY,
         margin: { left: 40, right: 40 },
