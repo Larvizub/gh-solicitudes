@@ -468,6 +468,11 @@ export default function TicketPage() {
           const dbTicketId = ticketKey || id;
           const existingSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}`));
           const prev = existingSnap.exists() ? existingSnap.val() : {};
+          // Si el ticket ya estaba cerrado, solo admin puede cambiar su estado
+          if (prev && String(prev.estado) === 'Cerrado' && ticketData && ticketData.estado && ticketData.estado !== 'Cerrado' && !isAdmin) {
+            setError('Ticket cerrado: solo un administrador puede reabrirlo');
+            return;
+          }
           const isAssignedPrev = matchesAssignToUser(prev, user);
           // permisos: solo admin o usuario asignado puede modificar
           if (!isAdmin && !isAssignedPrev && !(reassignMode && wasOriginallyAssigned)) {
@@ -822,7 +827,7 @@ export default function TicketPage() {
             <Button variant="outlined" component="label" disabled={saving || (!isNew && !isAdmin)}>{adjunto ? adjunto.name : (form.adjuntoNombre || 'Adjuntar archivo')}<input type="file" hidden onChange={e => setAdjunto(e.target.files[0])} /></Button>
             {(form.adjuntoUrl || adjunto) && <Box sx={{ mt: 1 }}><Typography variant="caption">{(adjunto && adjunto.name) || form.adjuntoNombre}</Typography></Box>}
           </Box>
-          <TextField select label="Estado" value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} disabled={saving || isNew || (!isAdmin && !matchesAssignToUser(form, user))}>
+          <TextField select label="Estado" value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} disabled={saving || isNew || (!isAdmin && !matchesAssignToUser(form, user)) || (form.estado === 'Cerrado' && !isAdmin)}>
             <MenuItem value="Abierto">Abierto</MenuItem>
             <MenuItem value="En Proceso">En Proceso</MenuItem>
             <MenuItem value="Cerrado">Cerrado</MenuItem>
@@ -975,7 +980,11 @@ export default function TicketPage() {
                 <Button 
                   variant="contained" 
                   onClick={handleSave} 
-                  disabled={(saving && !justSaved) || (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || (reassignMode && wasOriginallyAssigned)))}
+                  disabled={
+                    (saving && !justSaved) ||
+                    (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || (reassignMode && wasOriginallyAssigned))) ||
+                    (form && String(form.estado) === 'Cerrado' && !isAdmin)
+                  }
                   startIcon={isNew ? <AddIcon /> : <UpdateIcon />}
                 >
                   {saving && !justSaved ? (isNew ? 'CREANDO...' : 'GUARDANDO...') : (justSaved ? 'ENVIADO' : (isNew ? 'CREAR TICKET' : 'ACTUALIZAR TICKET'))}
