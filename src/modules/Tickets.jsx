@@ -145,10 +145,25 @@ export default function Tickets() {
     _forceSlaRecalcAt: nowTick, // campo fantasma para re-render de SLA
   }));
 
+  // Ordenar ticketsTabla por fecha de creación descendente (más recientes primero)
+  const ticketsTablaSorted = React.useMemo(() => {
+    try {
+      const copy = Array.isArray(ticketsTabla) ? [...ticketsTabla] : [];
+      copy.sort((a, b) => {
+        const aTs = a?._createdAt ? (typeof a._createdAt === 'number' ? a._createdAt : Date.parse(String(a._createdAt))) : 0;
+        const bTs = b?._createdAt ? (typeof b._createdAt === 'number' ? b._createdAt : Date.parse(String(b._createdAt))) : 0;
+        return (bTs || 0) - (aTs || 0);
+      });
+      return copy;
+    } catch {
+      return ticketsTabla;
+    }
+  }, [ticketsTabla]);
+
   // Estado y utilidades para la vista de tabla (filtro y contador de cerrados)
   const [tableFilter, setTableFilter] = useState('Todos'); // 'Todos'|'Abierto'|'En Proceso'|'Cerrado'
-  const closedCount = ticketsTabla.filter(t => t.estado === 'Cerrado').length;
-  const filteredTickets = tableFilter === 'Todos' ? ticketsTabla : ticketsTabla.filter(t => t.estado === tableFilter);
+  const closedCount = ticketsTablaSorted.filter(t => t.estado === 'Cerrado').length;
+  const filteredTickets = tableFilter === 'Todos' ? ticketsTablaSorted : ticketsTablaSorted.filter(t => t.estado === tableFilter);
   // Paginación simple
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 25;

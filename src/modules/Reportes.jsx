@@ -516,28 +516,39 @@ export default function Reportes() {
   ];
 
   // Pre-calcular campos derivados para evitar errores en valueGetter cuando params es indefinido
+  // Ordenar tickets por fecha de creación (más recientes primero)
   const enrichedTickets = React.useMemo(() => {
-    return ticketsFiltrados.map(t => {
-      let asignadosTexto = '';
-      let lastReassignAt = '';
-      if (t?.reassignments) {
-        try {
-          const arr = Object.values(t.reassignments).filter(Boolean);
-          if (arr.length) {
-            const maxAt = arr.reduce((m,o)=> (o?.at && o.at>m?o.at:m),0);
-            if (maxAt) lastReassignAt = new Date(maxAt).toLocaleString();
-            if (Array.isArray(t.asignados)) {
-              const list = t.asignados.map(a => resolveAssignedEntry(a)).filter(Boolean);
-              const seen = new Set();
-              const dedup = [];
-              for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
-              asignadosTexto = dedup.join(', ');
+    try {
+      const copy = Array.isArray(ticketsFiltrados) ? [...ticketsFiltrados] : [];
+      copy.sort((a, b) => {
+        const aTs = parseAnyTimestamp(a?.createdAt ?? a?.fecha ?? a?.timestamp ?? a?._createdAt) || 0;
+        const bTs = parseAnyTimestamp(b?.createdAt ?? b?.fecha ?? b?.timestamp ?? b?._createdAt) || 0;
+        return bTs - aTs; // descendente: más reciente primero
+      });
+      return copy.map(t => {
+        let asignadosTexto = '';
+        let lastReassignAt = '';
+        if (t?.reassignments) {
+          try {
+            const arr = Object.values(t.reassignments).filter(Boolean);
+            if (arr.length) {
+              const maxAt = arr.reduce((m,o)=> (o?.at && o.at>m?o.at:m),0);
+              if (maxAt) lastReassignAt = new Date(maxAt).toLocaleString();
+              if (Array.isArray(t.asignados)) {
+                const list = t.asignados.map(a => resolveAssignedEntry(a)).filter(Boolean);
+                const seen = new Set();
+                const dedup = [];
+                for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
+                asignadosTexto = dedup.join(', ');
+              }
             }
-          }
-        } catch { /* noop */ }
-      }
-      return { ...t, asignadosTexto, lastReassignAt };
-    });
+          } catch { /* noop */ }
+        }
+        return { ...t, asignadosTexto, lastReassignAt };
+      });
+    } catch {
+      return ticketsFiltrados.map(t => ({ ...t }));
+    }
   }, [ticketsFiltrados, resolveAssignedEntry]);
 
   // Exportar a Excel
