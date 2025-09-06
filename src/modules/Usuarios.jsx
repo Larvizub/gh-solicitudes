@@ -43,6 +43,7 @@ export default function Usuarios() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [query, setQuery] = useState('');
   const notify = useNotification();
 
   React.useEffect(() => {
@@ -198,6 +199,17 @@ export default function Usuarios() {
     },
   ].filter(Boolean);
 
+  // Filtrar usuarios por nombre o apellido (busqueda)
+  const filteredUsuarios = React.useMemo(() => {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return usuarios;
+    return usuarios.filter(u => {
+      const nombre = (u.nombre || '').toLowerCase();
+      const apellido = (u.apellido || '').toLowerCase();
+      return nombre.includes(q) || apellido.includes(q);
+    });
+  }, [usuarios, query]);
+
   return (
     <Box
       sx={{
@@ -219,7 +231,16 @@ export default function Usuarios() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       <Paper elevation={1} sx={{ p: 2, borderRadius: 3, boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)', mb: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1, gap: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+            <TextField
+              size="small"
+              placeholder="Buscar por nombre o apellido"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              sx={{ minWidth: 240 }}
+            />
+          </Box>
           {userData?.rol === 'admin' && (
             <>
               <Button
@@ -242,7 +263,7 @@ export default function Usuarios() {
           )}
         </Box>
           <DataGrid
-          rows={usuarios}
+          rows={filteredUsuarios}
           columns={columns}
           pageSize={10}
           rowsPerPageOptions={[5, 10, 20]}

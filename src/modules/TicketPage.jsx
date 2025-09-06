@@ -88,6 +88,20 @@ export default function TicketPage() {
   // el creador del ticket (usuario que lo abrió) puede cerrar su propio ticket
   const isCreator = !!(form?.usuarioEmail && user?.email && String(form.usuarioEmail).toLowerCase() === String(user.email).toLowerCase());
 
+  // determinar el departamento del usuario actual (intentar userData, fallback a lista de usuarios)
+  const userDepartamento = React.useMemo(() => {
+    if (userData?.departamento) return String(userData.departamento);
+    const me = usuarios.find(u => (u.id && u.id === (user?.uid || '')) || ((u.email || '').toLowerCase() === (user?.email || '').toLowerCase()));
+    if (me) return me.departamento || me.departamentoNombre || '';
+    return '';
+  }, [userData, usuarios, user]);
+
+  const isSameDepartment = React.useMemo(() => {
+    const deptForm = form?.departamento || '';
+    if (!deptForm) return false;
+    return String((userDepartamento || '')).toLowerCase() === String(deptForm).toLowerCase();
+  }, [userDepartamento, form?.departamento]);
+
   // helper to check whether the current user is one of the assignees (compat across shapes)
   function matchesAssignToUser(ticket, userObj) {
     if (!ticket || !userObj) return false;
@@ -236,13 +250,14 @@ export default function TicketPage() {
   }, [form.departamento, ctxDb, recinto]);
 
   // Pause / Resume handlers
-  const canControlPause = isAdmin || matchesAssignToUser(form, user);
+  const canControlPause = isAdmin || matchesAssignToUser(form, user) || isSameDepartment;
   const canComment = () => {
     if (!user) return false;
     if (isAdmin) return true;
     const myEmail = (user?.email || '').toLowerCase();
     if (form.usuarioEmail && String(form.usuarioEmail).toLowerCase() === myEmail) return true;
     if (matchesAssignToUser(form, user)) return true;
+    if (isSameDepartment) return true;
     return false;
   };
   const handlePause = async () => {
@@ -479,13 +494,13 @@ export default function TicketPage() {
             return;
           }
           const isAssignedPrev = matchesAssignToUser(prev, user);
-          // permisos: solo admin, usuario asignado, o el creador puede cerrar su ticket
-          if (!isAdmin && !isAssignedPrev && !(reassignMode && wasOriginallyAssigned) && !isCreator) {
+          // permisos: admin, usuario asignado, creador o usuario del mismo departamento pueden modificar
+          if (!isAdmin && !isAssignedPrev && !(reassignMode && wasOriginallyAssigned) && !isCreator && !isSameDepartment) {
             setError('No tienes permisos para modificar este ticket');
             return;
           }
-          // si es usuario asignado (no admin) (o estaba asignado originalmente y está en modo reasignación), permitir estado y (en modo reasignación) asignados/subcategoría
-          if (!isAdmin && (isAssignedPrev || (reassignMode && wasOriginallyAssigned))) {
+          // si es usuario asignado o del mismo departamento (no admin) (o estaba asignado originalmente y está en modo reasignación), permitir estado y (en modo reasignación) asignados/subcategoría
+          if (!isAdmin && (isAssignedPrev || isSameDepartment || (reassignMode && wasOriginallyAssigned))) {
             const allowedUpdate = {};
             const changes = [];
             if (ticketData.estado && ticketData.estado !== prev.estado) {
@@ -865,7 +880,7 @@ export default function TicketPage() {
             {(form.adjuntoUrl || adjunto) && <Box sx={{ mt: 1 }}><Typography variant="caption">{(adjunto && adjunto.name) || form.adjuntoNombre}</Typography></Box>}
           </Box>
           <TextField select label="Estado" value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} disabled={
-            saving || isNew || (!isAdmin && !matchesAssignToUser(form, user) && !isCreator) ||
+            saving || isNew || (!isAdmin && !matchesAssignToUser(form, user) && !isCreator && !isSameDepartment) ||
             (originalEstado === 'Cerrado' && !isAdmin)
           }>
             <MenuItem value="Abierto">Abierto</MenuItem>
@@ -1020,11 +1035,11 @@ export default function TicketPage() {
                 <Button 
                   variant="contained" 
                   onClick={handleSave} 
-                  disabled={
-                    (saving && !justSaved) ||
-                    (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || isCreator || (reassignMode && wasOriginallyAssigned))) ||
-                    (originalEstado === 'Cerrado' && !isAdmin)
-                   }
+          disabled={
+            (saving && !justSaved) ||
+            (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || isCreator || (reassignMode && wasOriginallyAssigned) || isSameDepartment)) ||
+            (originalEstado === 'Cerrado' && !isAdmin)
+             }
                   startIcon={isNew ? <AddIcon /> : <UpdateIcon />}
                 >
                   {saving && !justSaved ? (isNew ? 'CREANDO...' : 'GUARDANDO...') : (justSaved ? 'ENVIADO' : (isNew ? 'CREAR TICKET' : 'ACTUALIZAR TICKET'))}
