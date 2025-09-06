@@ -72,6 +72,7 @@ export default function TicketPage() {
   const [lastPauseKey, setLastPauseKey] = useState(null);
   const [isPausedState, setIsPausedState] = useState(false);
   const [ticketKey, setTicketKey] = useState(null); // actual firebase key for the ticket (may differ from URL id)
+  const [originalEstado, setOriginalEstado] = useState(null);
   const [pauseReasonId, setPauseReasonId] = useState('');
   const [pauseComment, setPauseComment] = useState('');
   const [pauseLoading, setPauseLoading] = useState(false);
@@ -84,6 +85,8 @@ export default function TicketPage() {
 
   const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
   const canDelete = !isNew && (isAdmin || (user?.email && form?.usuarioEmail && String(form.usuarioEmail).toLowerCase() === String(user.email).toLowerCase()));
+  // el creador del ticket (usuario que lo abrió) puede cerrar su propio ticket
+  const isCreator = !!(form?.usuarioEmail && user?.email && String(form.usuarioEmail).toLowerCase() === String(user.email).toLowerCase());
 
   // helper to check whether the current user is one of the assignees (compat across shapes)
   function matchesAssignToUser(ticket, userObj) {
@@ -176,6 +179,7 @@ export default function TicketPage() {
             setForm({
               departamento: t.departamento || '', tipo: t.tipo || '', subcategoria: t.subcategoria || '', descripcion: t.descripcion || '', estado: t.estado || 'Abierto', usuario: t.usuario || '', usuarioEmail: t.usuarioEmail || '', adjuntoUrl: t.adjuntoUrl || '', adjuntoNombre: t.adjuntoNombre || '', asignados: t.asignados || [], codigo: t.codigo || '',
             });
+            setOriginalEstado(t.estado || 'Abierto');
             // Guardar si el usuario estaba asignado originalmente (permite quitarse y aún guardar en la misma sesión de reasignación)
             try { setWasOriginallyAssigned(matchesAssignToUser(t, user)); } catch { /* ignore */ }
             // load comments if any (object -> array sorted asc)
@@ -193,6 +197,7 @@ export default function TicketPage() {
           }
         } else {
           setForm(f => ({ ...f, usuario: userData?.nombre ? `${userData.nombre} ${userData.apellido || ''}`.trim() : (user?.email || ''), usuarioEmail: user?.email || '' }));
+          setOriginalEstado(null);
           setCommentsArr([]);
         }
       } catch (e) {
@@ -474,8 +479,8 @@ export default function TicketPage() {
             return;
           }
           const isAssignedPrev = matchesAssignToUser(prev, user);
-          // permisos: solo admin o usuario asignado puede modificar
-          if (!isAdmin && !isAssignedPrev && !(reassignMode && wasOriginallyAssigned)) {
+          // permisos: solo admin, usuario asignado, o el creador puede cerrar su ticket
+          if (!isAdmin && !isAssignedPrev && !(reassignMode && wasOriginallyAssigned) && !isCreator) {
             setError('No tienes permisos para modificar este ticket');
             return;
           }
@@ -547,6 +552,7 @@ export default function TicketPage() {
                         htmlOverride: html,
                         cc: [user?.email].filter(Boolean)
                       });
+                      try { console.debug && console.debug('Enviar reasignación', { to: resolvedEmails, subject: payload.subject }); } catch (err) { console.warn('Debug log failed', err); }
                       await sendTicketMail(payload);
                     }
                   }
@@ -557,6 +563,29 @@ export default function TicketPage() {
             setSnackbar({ open: true, message: 'Ticket actualizado', severity: 'success' });
             ticketIdFinal = ticketData.codigo || dbTicketId;
             if (reassignMode) setReassignMode(false);
+          } else if (!isAdmin && isCreator) {
+            // permiso especial: el creador puede CERRAR su propio ticket (pero no reabrir ni cambiar otros campos)
+            if (ticketData.estado && ticketData.estado !== prev.estado) {
+              if (ticketData.estado === 'Cerrado') {
+                const closeUpdate = {
+                  estado: 'Cerrado',
+                  resueltoPorUid: user?.uid || '',
+                  resueltoPorEmail: user?.email || '',
+                  resueltoPorNombre: userData?.nombre ? `${userData.nombre} ${userData.apellido || ''}`.trim() : (user?.email || ''),
+                  resueltoEn: new Date().toISOString(),
+                };
+                await update(dbRef(dbInstance, `tickets/${dbTicketId}`), closeUpdate);
+                shouldNotify = true;
+                setSnackbar({ open: true, message: 'Ticket cerrado', severity: 'success' });
+                ticketIdFinal = ticketData.codigo || dbTicketId;
+              } else {
+                setError('No tienes permisos para modificar este ticket');
+                return;
+              }
+            } else {
+              setError('No se detectaron cambios permitidos');
+              return;
+            }
           } else {
             // es admin -> puede actualizar cualquier campo
             const dbTicketId2 = ticketKey || id;
@@ -605,6 +634,7 @@ export default function TicketPage() {
                         htmlOverride: html,
                         cc: [user?.email].filter(Boolean)
                       });
+                      try { console.debug && console.debug('Enviar reasignación (admin)', { to: resolvedEmails, subject: payload.subject }); } catch (err) { console.warn('Debug log failed', err); }
                       await sendTicketMail(payload);
                     }
                   }
@@ -625,29 +655,33 @@ export default function TicketPage() {
       // Enviar notificación si corresponde (creación o cambio de estado)
       if (shouldNotify) {
         try {
+          // obtener versión actual desde la DB (asegura que usamos el estado guardado)
+          const dbTicketIdFinal = ticketKey || id;
+          const latestSnap = await get(dbRef(dbInstance, `tickets/${dbTicketIdFinal}`));
+          const latestTicket = latestSnap.exists() ? latestSnap.val() : ticketData;
           const baseUrl = window.location.origin;
-          const depObj = departamentos.find(d => d.id === ticketData.departamento);
-          const departamentoNombre = depObj ? depObj.nombre : ticketData.departamento;
-          const ticketForHtml = { ...ticketData, ticketId: ticketData.codigo || ticketIdFinal, departamentoNombre };
-          const resumenCambios = isNew ? 'Creación de ticket' : `Cambio de estado a ${ticketData.estado}`;
+          const depObj = departamentos.find(d => d.id === latestTicket.departamento);
+          const departamentoNombre = depObj ? depObj.nombre : latestTicket.departamento;
+          const ticketForHtml = { ...latestTicket, ticketId: latestTicket.codigo || ticketIdFinal, departamentoNombre };
+          const resumenCambios = isNew ? 'Creación de ticket' : `Cambio de estado a ${ticketForHtml.estado}`;
           const html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
-          const ticketLabel = ticketData.codigo || ticketIdFinal;
-          const subject = `[Ticket ${ticketData.estado}] ${ticketData.tipo || ''} #${ticketLabel}`;
+          const ticketLabel = ticketForHtml.codigo || ticketIdFinal;
+          const subject = `[Ticket ${ticketForHtml.estado}] ${ticketForHtml.tipo || ''} #${ticketLabel}`;
           // destinatarios: resolver asignados y asegurarse de incluir al creador
           let toList = [];
-          if (ticketData.asignadoEmails && ticketData.asignadoEmails.length) {
-            toList = ticketData.asignadoEmails.slice();
-          } else if (ticketData.asignados && ticketData.asignados.length) {
-            const resolved = ticketData.asignados.map(idu => {
+          if (ticketForHtml.asignadoEmails && ticketForHtml.asignadoEmails.length) {
+            toList = ticketForHtml.asignadoEmails.slice();
+          } else if (ticketForHtml.asignados && ticketForHtml.asignados.length) {
+            const resolved = ticketForHtml.asignados.map(idu => {
               const u = usuarios.find(x => x.id === idu);
               return u ? u.email : null;
             }).filter(Boolean);
             toList = resolved;
-          } else if (ticketData.asignadoEmail) {
-            toList = [ticketData.asignadoEmail];
+          } else if (ticketForHtml.asignadoEmail) {
+            toList = [ticketForHtml.asignadoEmail];
           }
           // incluir siempre al creador (usuarioEmail) para cambios de estado/creación
-          const creatorEmail = ticketData.usuarioEmail ? String(ticketData.usuarioEmail).toLowerCase() : null;
+          const creatorEmail = ticketForHtml.usuarioEmail ? String(ticketForHtml.usuarioEmail).toLowerCase() : null;
           const normalized = (toList || []).map(e => String(e || '').toLowerCase()).filter(Boolean);
           if (creatorEmail) normalized.push(creatorEmail);
           // deduplicar
@@ -663,6 +697,9 @@ export default function TicketPage() {
             // mantener cc para compatibilidad (vacío si no hay)
             cc: []
           });
+          // DEBUG: confirmar que entramos al flujo de notificación y cuál es el payload
+          try { console.debug && console.debug('Enviando notificación ticket', { subject, to: ticketForHtmlWithTo.to, departamento: ticketData.departamento }); } catch (err) { console.warn('Debug log failed', err); }
+          try { console.debug && console.debug('Enviando notificación ticket', { subject, to: ticketForHtmlWithTo.to, departamento: ticketData.departamento }); } catch (err) { console.warn('Debug log failed', err); }
           await sendTicketMail(payload);
           const finalMsg = isNew ? 'Ticket creado (Notificación enviada)' : 'Ticket actualizado (Notificación enviada)';
           // éxito gestionado vía snackbar
@@ -827,7 +864,10 @@ export default function TicketPage() {
             <Button variant="outlined" component="label" disabled={saving || (!isNew && !isAdmin)}>{adjunto ? adjunto.name : (form.adjuntoNombre || 'Adjuntar archivo')}<input type="file" hidden onChange={e => setAdjunto(e.target.files[0])} /></Button>
             {(form.adjuntoUrl || adjunto) && <Box sx={{ mt: 1 }}><Typography variant="caption">{(adjunto && adjunto.name) || form.adjuntoNombre}</Typography></Box>}
           </Box>
-          <TextField select label="Estado" value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} disabled={saving || isNew || (!isAdmin && !matchesAssignToUser(form, user)) || (form.estado === 'Cerrado' && !isAdmin)}>
+          <TextField select label="Estado" value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} disabled={
+            saving || isNew || (!isAdmin && !matchesAssignToUser(form, user) && !isCreator) ||
+            (originalEstado === 'Cerrado' && !isAdmin)
+          }>
             <MenuItem value="Abierto">Abierto</MenuItem>
             <MenuItem value="En Proceso">En Proceso</MenuItem>
             <MenuItem value="Cerrado">Cerrado</MenuItem>
@@ -982,9 +1022,9 @@ export default function TicketPage() {
                   onClick={handleSave} 
                   disabled={
                     (saving && !justSaved) ||
-                    (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || (reassignMode && wasOriginallyAssigned))) ||
-                    (form && String(form.estado) === 'Cerrado' && !isAdmin)
-                  }
+                    (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || isCreator || (reassignMode && wasOriginallyAssigned))) ||
+                    (originalEstado === 'Cerrado' && !isAdmin)
+                   }
                   startIcon={isNew ? <AddIcon /> : <UpdateIcon />}
                 >
                   {saving && !justSaved ? (isNew ? 'CREANDO...' : 'GUARDANDO...') : (justSaved ? 'ENVIADO' : (isNew ? 'CREAR TICKET' : 'ACTUALIZAR TICKET'))}
