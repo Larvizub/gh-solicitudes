@@ -18,7 +18,7 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
     tipo,
     estado,
     subcategoria,
-    prioridad,
+  // prioridad (no mostrado; sustituido por Vencimiento)
     descripcion,
     usuarioEmail,
     usuario,
@@ -48,8 +48,19 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
     } catch { return false; }
   };
 
-  const priorityColor = (p => ({ Alta:'#c62828', Media:'#ed6c02', Baja:'#2e7d32' }[p] || '#455a64'))(prioridad);
   const stateColor = (s => ({ Nuevo: primary, 'En Proceso':'#1565c0', Cerrado:'#2e7d32', Resuelto:'#2e7d32', Finalizado:'#2e7d32' }[s] || primary))(estado);
+
+  // calcular texto de vencimiento (horas hábiles) a partir de campos comunes en ticket
+  const computeVencimientoText = () => {
+    const candidates = [ticket.slaHours, ticket.slaHoras, ticket.subcategoriaHoras, ticket.subcategoriaTiempo, ticket.subcategoriaSlaHours];
+    const found = candidates.find(v => v !== undefined && v !== null && String(v).trim() !== '');
+    if (found === undefined) return 'El Ticket tiene un tiempo de -- horas habiles asignadas';
+    // si es numérico
+    const n = Number(found);
+    if (!isNaN(n)) return `El Ticket tiene un tiempo de ${n} horas habiles asignadas`;
+    return `El Ticket tiene un tiempo de ${String(found)} horas habiles asignadas`;
+  };
+  const vencimientoText = computeVencimientoText();
 
   const sanitize = (str='') => String(str).replace(/</g,'&lt;');
 
@@ -71,7 +82,7 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid ${divider};border-radius:6px;border-collapse:collapse;margin:0 0 18px;">
               ${row('Departamento', departamentoNombre || departamento)}
               ${row('Subcategoría', subcategoria)}
-              ${row('Prioridad', prioridad, priorityColor)}
+              ${row('Vencimiento', vencimientoText)}
               ${row('Estado', estado, stateColor)}
               ${asignadoA ? row('Asignado a', asignadoA) : ''}
             </table>
