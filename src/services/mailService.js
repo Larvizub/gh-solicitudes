@@ -1,7 +1,7 @@
 export async function sendTicketMail(payload) {
-  // If an explicit URL is provided via env, use it directly. This avoids forcing a relative
-  // '/sendMail' which returns 404 in local dev when Hosting rewrites are not active.
-  // Fallback to '/sendMail' when no env var is provided.
+  // Si se proporciona una URL explícita vía env, usarla directamente. Esto evita forzar una ruta
+  // relativa '/sendMail' que devuelve 404 en desarrollo local cuando las reescrituras del Hosting
+  // no están activas. Usar '/sendMail' como fallback cuando no se provee la variable de entorno.
   const configured = import.meta.env.VITE_SENDMAIL_URL;
   const url = configured ? configured : '/sendMail';
   const apiKey = import.meta.env.VITE_SENDMAIL_API_KEY;
