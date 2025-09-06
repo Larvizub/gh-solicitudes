@@ -116,7 +116,45 @@ export default function Dashboard() {
   // Tickets visibles según rol (admin ve todo, usuario solo los de su departamento)
   const viewTickets = isAdmin ? tickets : tickets.filter(t => matchesUserDepartment(t.departamento));
   // Si no admin y aún no conocemos su departamento, no mostrar datos (vista vacía segura)
-  const effectiveTickets = (!isAdmin && !userDeptId) ? [] : viewTickets;
+  const effectiveTickets = React.useMemo(() => ((!isAdmin && !userDeptId) ? [] : viewTickets), [isAdmin, userDeptId, viewTickets]);
+
+  // Helper para obtener timestamp de creación en ms (robusto a distintos campos)
+  const getTicketCreatedTs = (t) => {
+    if (!t) return 0;
+    // Priorizar campos comunes
+    if (t.createdAt) {
+      const v = t.createdAt;
+      if (typeof v === 'number') return v < 1e12 ? v * 1000 : v;
+      const n = parseInt(v, 10);
+      if (!isNaN(n)) return n < 1e12 ? n * 1000 : n;
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    if (t.fecha) {
+      const d = new Date(t.fecha);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    if (t.timestamp) {
+      const v = t.timestamp;
+      if (typeof v === 'number') return v < 1e12 ? v * 1000 : v;
+      const n = parseInt(v, 10);
+      if (!isNaN(n)) return n < 1e12 ? n * 1000 : n;
+    }
+    // fallback: try id if it's a numeric ms key
+    if (t.id && !isNaN(Number(t.id)) && Number(t.id) > 1000000000000) return Number(t.id);
+    return 0;
+  };
+
+  // Calcular los 2 tickets más recientes (según timestamp calculado), respetando effectiveTickets
+  const recentTickets = React.useMemo(() => {
+    try {
+      const copy = Array.isArray(effectiveTickets) ? [...effectiveTickets] : [];
+      copy.sort((a, b) => (getTicketCreatedTs(b) || 0) - (getTicketCreatedTs(a) || 0));
+      return copy.slice(0, 2);
+    } catch {
+      return (effectiveTickets || []).slice(0, 2);
+    }
+  }, [effectiveTickets]);
 
   // Estadísticas basadas en tickets visibles
   const total = effectiveTickets.length;
@@ -474,10 +512,7 @@ export default function Dashboard() {
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
               Tickets recientes
             </Typography>
-            {effectiveTickets
-              .slice(-5)
-              .reverse()
-              .map((t) => (
+            {recentTickets.map((t) => (
                 <Box
                   key={t.id}
                   sx={{
@@ -520,7 +555,7 @@ export default function Dashboard() {
                     </Typography>
                   </Box>
                 </Box>
-              ))}
+                ))}
             {effectiveTickets.length === 0 && (
               <Typography variant="body2" color="text.secondary">
                 No hay tickets registrados
