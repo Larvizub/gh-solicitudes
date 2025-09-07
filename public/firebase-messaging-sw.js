@@ -1,16 +1,16 @@
 /* eslint-env serviceworker */
 /* global importScripts, firebase, clients */
 // firebase-messaging-sw.js
-// This file must be placed at the root of the served site (public/firebase-messaging-sw.js)
-// It handles background messages for Firebase Cloud Messaging (FCM).
+// Este archivo debe ubicarse en la raíz del sitio servido (public/firebase-messaging-sw.js)
+// Maneja mensajes en segundo plano para Firebase Cloud Messaging (FCM).
 
-// IMPORTANT: You must initialize Firebase in this file with the same config used in the app.
-// For security, you can include only the public parts of the config here (the same values in src/firebase/firebaseConfig.js).
+// IMPORTANTE: Debes inicializar Firebase en este archivo con la misma configuración usada en la app.
+// Por seguridad, aquí sólo puedes incluir las partes públicas de la configuración (los mismos valores que en src/firebase/firebaseConfig.js).
 
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
 
-// TODO: replace the following config with your project's values (same as in src/firebase/firebaseConfig.js)
+// TODO: reemplaza la siguiente configuración con los valores de tu proyecto (los mismos que en src/firebase/firebaseConfig.js)
 const firebaseConfig = {
   apiKey: 'REPLACE_WITH_YOUR_API_KEY',
   authDomain: 'REPLACE_WITH_YOUR_AUTH_DOMAIN',
@@ -24,9 +24,9 @@ firebase.initializeApp(firebaseConfig);
 
 const messaging = firebase.messaging();
 
-// Customize background notification handling
+// Personalizar el manejo de notificaciones en segundo plano
 messaging.onBackgroundMessage(function(payload) {
-  console.log('[firebase-messaging-sw.js] Received background message ', payload);
+  console.log('[firebase-messaging-sw.js] Mensaje en segundo plano recibido ', payload);
   const notificationTitle = payload.notification?.title || 'Nueva notificación';
   const notificationOptions = {
     body: payload.notification?.body || JSON.stringify(payload.data || {}),
@@ -37,9 +37,9 @@ messaging.onBackgroundMessage(function(payload) {
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// Optional: handle notificationclick
+// Opcional: manejar el evento notificationclick
 self.addEventListener('notificationclick', function(event) {
-  console.log('On notification click: ', event.notification);
+  console.log('Al hacer clic en la notificación: ', event.notification);
   event.notification.close();
   const clickAction = (event.notification && event.notification.data && event.notification.data.click_action) || '/';
   event.waitUntil(clients.openWindow(clickAction));
