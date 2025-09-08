@@ -488,9 +488,9 @@ export default function TicketPage() {
           const dbTicketId = ticketKey || id;
           const existingSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}`));
           const prev = existingSnap.exists() ? existingSnap.val() : {};
-          // Si el ticket ya estaba cerrado, solo admin puede cambiar su estado
-          if (prev && String(prev.estado) === 'Cerrado' && ticketData && ticketData.estado && ticketData.estado !== 'Cerrado' && !isAdmin) {
-            setError('Ticket cerrado: solo un administrador puede reabrirlo');
+          // Si el ticket ya estaba cerrado, solo admin o el creador pueden reabrirlo
+          if (prev && String(prev.estado) === 'Cerrado' && ticketData && ticketData.estado && ticketData.estado !== 'Cerrado' && !(isAdmin || isCreator)) {
+            setError('Ticket cerrado: solo un administrador o el creador puede reabrirlo');
             return;
           }
           const isAssignedPrev = matchesAssignToUser(prev, user);
@@ -579,7 +579,7 @@ export default function TicketPage() {
             ticketIdFinal = ticketData.codigo || dbTicketId;
             if (reassignMode) setReassignMode(false);
           } else if (!isAdmin && isCreator) {
-            // permiso especial: el creador puede CERRAR su propio ticket (pero no reabrir ni cambiar otros campos)
+            // permiso especial: el creador puede CERRAR su propio ticket y también REABRIRLO, pero no cambiar otros campos
             if (ticketData.estado && ticketData.estado !== prev.estado) {
               if (ticketData.estado === 'Cerrado') {
                 const closeUpdate = {
@@ -592,6 +592,21 @@ export default function TicketPage() {
                 await update(dbRef(dbInstance, `tickets/${dbTicketId}`), closeUpdate);
                 shouldNotify = true;
                 setSnackbar({ open: true, message: 'Ticket cerrado', severity: 'success' });
+                ticketIdFinal = ticketData.codigo || dbTicketId;
+              } else if (prev && String(prev.estado) === 'Cerrado' && ticketData.estado !== 'Cerrado') {
+                // Reapertura por el creador: limpiar campos de resolución y actualizar estado
+                const reopenUpdate = {
+                  estado: ticketData.estado,
+                  resueltoPorUid: null,
+                  resueltoPorEmail: null,
+                  resueltoPorNombre: null,
+                  resueltoEn: null,
+                  // opcional: reiniciar SLA
+                  lastSlaStartAt: Date.now(),
+                };
+                await update(dbRef(dbInstance, `tickets/${dbTicketId}`), reopenUpdate);
+                shouldNotify = true;
+                setSnackbar({ open: true, message: 'Ticket reabierto', severity: 'success' });
                 ticketIdFinal = ticketData.codigo || dbTicketId;
               } else {
                 setError('No tienes permisos para modificar este ticket');
