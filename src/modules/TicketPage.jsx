@@ -276,6 +276,58 @@ export default function TicketPage() {
       setPausesArr(a => ([...a, { key: newRef.key, ...newPause }]));
       setIsPausedState(true);
       setSnackbar({ open: true, message: 'Ticket pausado', severity: 'success' });
+      // Enviar notificación por correo sobre la pausa (incluye motivo y comentario)
+      try {
+        const ticketSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}`));
+        const ticketObj = ticketSnap.exists() ? ticketSnap.val() : {};
+        const depObj = departamentos.find(d => d.id === ticketObj.departamento);
+        const departamentoNombre = depObj ? depObj.nombre : ticketObj.departamento;
+        const baseUrl = window.location.origin;
+        const ticketForHtml = { ...ticketObj, ticketId: ticketObj.codigo || dbTicketId, departamentoNombre };
+        const motivoNombre = (pauseReasons.find(r => r.id === (pauseReasonId || '')) || {}).nombre || pauseReasonId || 'Sin motivo';
+        const resumenCambios = `Ticket puesto en pausa: ${motivoNombre}`;
+        let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
+        // adjuntar motivo y comentario
+        try {
+          const pauseHtml = `\n<div style="margin-top:16px;padding:12px;border-left:4px solid #ff9800;background:#fff7e6">` +
+            `<strong>Motivo:</strong> ${escapeHtml(motivoNombre)}<br/>` +
+            `<strong>Comentario:</strong><p style="white-space:pre-wrap">${escapeHtml(pauseComment || '')}</p>` +
+            `</div>`;
+          html = `${html}${pauseHtml}`;
+        } catch { /* no crítico */ }
+        // destinatarios: asignados -> emails; incluir creador
+        let toList = [];
+        if (ticketObj.asignadoEmails && ticketObj.asignadoEmails.length) {
+          toList = ticketObj.asignadoEmails.slice();
+        } else if (ticketObj.asignados && ticketObj.asignados.length) {
+          const resolved = ticketObj.asignados.map(idu => {
+            const u = usuarios.find(x => x.id === idu);
+            return u ? u.email : null;
+          }).filter(Boolean);
+          toList = resolved;
+        } else if (ticketObj.asignadoEmail) {
+          toList = [ticketObj.asignadoEmail];
+        }
+        const creatorEmail = ticketObj.usuarioEmail ? String(ticketObj.usuarioEmail).toLowerCase() : null;
+        const normalized = (toList || []).map(e => String(e || '').toLowerCase()).filter(Boolean);
+        if (creatorEmail) normalized.push(creatorEmail);
+        const unique = Array.from(new Set(normalized));
+        const payload = buildSendMailPayload({
+          ticket: { ...ticketForHtml, to: unique },
+          departamento: ticketObj.departamento,
+          departamentoNombre,
+          subject: `[Ticket pausado] ${ticketObj.tipo || ''} #${ticketObj.codigo || dbTicketId}`,
+          actionMsg: resumenCambios,
+          htmlOverride: html,
+          cc: []
+        });
+  await sendTicketMail(payload);
+  // Indicar al usuario que la notificación por correo fue enviada
+  setSnackbar({ open: true, message: 'Notificación de Ticket Pausado enviada', severity: 'success' });
+      } catch (e) {
+        console.error('Error enviando notificación de pausa', e);
+        // no bloquear flujo principal
+      }
     } catch (e) {
       console.error('Error pausando ticket', e);
       setError('Error al pausar el ticket');
@@ -299,6 +351,63 @@ export default function TicketPage() {
       setIsPausedState(false);
       setLastPauseKey(null);
       setSnackbar({ open: true, message: 'Ticket reanudado', severity: 'success' });
+        // Enviar notificación por correo sobre la reanudación (incluye motivo, comentario y duración de la pausa)
+        try {
+          const pauseSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}/pauses/${lastPauseKey}`));
+          const pauseObj = pauseSnap.exists() ? pauseSnap.val() : null;
+          const ticketSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}`));
+          const ticketObj = ticketSnap.exists() ? ticketSnap.val() : {};
+          const depObj = departamentos.find(d => d.id === ticketObj.departamento);
+          const departamentoNombre = depObj ? depObj.nombre : ticketObj.departamento;
+          const baseUrl = window.location.origin;
+          const ticketForHtml = { ...ticketObj, ticketId: ticketObj.codigo || dbTicketId, departamentoNombre };
+          const motivoNombre = pauseObj && pauseObj.reasonId ? ((pauseReasons.find(r => r.id === pauseObj.reasonId) || {}).nombre || pauseObj.reasonId) : 'Sin motivo';
+          const pausaInicio = pauseObj && pauseObj.start ? Number(pauseObj.start) : null;
+          const pausaFin = endTs;
+          const durMs = (pausaInicio ? (pausaFin - pausaInicio) : null);
+          const durText = durMs ? msToHoursMinutes(durMs) : 'N/A';
+          const resumenCambios = `Ticket reanudado (duración de pausa: ${durText})`;
+          let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
+          try {
+            const resumeHtml = `\n<div style="margin-top:16px;padding:12px;border-left:4px solid #4caf50;background:#f0fff4">` +
+              `<strong>Motivo:</strong> ${escapeHtml(motivoNombre)}<br/>` +
+              `<strong>Comentario de pausa:</strong><p style="white-space:pre-wrap">${escapeHtml((pauseObj && pauseObj.comment) || pauseComment || '')}</p>` +
+              `<strong>Duración de la pausa:</strong> ${escapeHtml(durText)}` +
+              `</div>`;
+            html = `${html}${resumeHtml}`;
+          } catch { /* no crítico */ }
+          // destinatarios como en pausa
+          let toList = [];
+          if (ticketObj.asignadoEmails && ticketObj.asignadoEmails.length) {
+            toList = ticketObj.asignadoEmails.slice();
+          } else if (ticketObj.asignados && ticketObj.asignados.length) {
+            const resolved = ticketObj.asignados.map(idu => {
+              const u = usuarios.find(x => x.id === idu);
+              return u ? u.email : null;
+            }).filter(Boolean);
+            toList = resolved;
+          } else if (ticketObj.asignadoEmail) {
+            toList = [ticketObj.asignadoEmail];
+          }
+          const creatorEmail = ticketObj.usuarioEmail ? String(ticketObj.usuarioEmail).toLowerCase() : null;
+          const normalized = (toList || []).map(e => String(e || '').toLowerCase()).filter(Boolean);
+          if (creatorEmail) normalized.push(creatorEmail);
+          const unique = Array.from(new Set(normalized));
+          const payload = buildSendMailPayload({
+            ticket: { ...ticketForHtml, to: unique },
+            departamento: ticketObj.departamento,
+            departamentoNombre,
+            subject: `[Ticket reanudado] ${ticketObj.tipo || ''} #${ticketObj.codigo || dbTicketId}`,
+            actionMsg: resumenCambios,
+            htmlOverride: html,
+            cc: []
+          });
+    await sendTicketMail(payload);
+    // Indicar al usuario que la notificación por correo fue enviada
+    setSnackbar({ open: true, message: 'Notificación de Ticket Reanudado enviada', severity: 'success' });
+        } catch (e) {
+          console.error('Error enviando notificación de reanudación', e);
+        }
     } catch (e) {
       console.error('Error reanudando ticket', e);
       setError('Error al reanudar el ticket');
