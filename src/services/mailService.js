@@ -1,4 +1,21 @@
+function extractRecipientsFromPayload(payload) {
+  if (!payload) return [];
+  const recipients = new Set();
+  try {
+    const t = payload.ticket || {};
+    if (Array.isArray(payload.to)) payload.to.forEach(x => x && recipients.add(String(x).toLowerCase()));
+    if (Array.isArray(payload.cc)) payload.cc.forEach(x => x && recipients.add(String(x).toLowerCase()));
+    if (Array.isArray(t.to)) t.to.forEach(x => x && recipients.add(String(x).toLowerCase()));
+    if (Array.isArray(t.asignados)) t.asignados.forEach(x => x && recipients.add(String(x).toLowerCase()));
+    if (t.usuarioEmail) recipients.add(String(t.usuarioEmail).toLowerCase());
+  } catch { /* ignore */ }
+  return Array.from(recipients).filter(Boolean).filter(s => /@/.test(s));
+}
+
 export async function sendTicketMail(payload) {
+  const recs = extractRecipientsFromPayload(payload);
+  if (!recs.length) throw new Error('No se han encontrado destinatarios válidos. Asegúrate de incluir al creador o asignados en el ticket.');
+
   // Si se proporciona una URL explícita vía env, usarla directamente. Esto evita forzar una ruta
   // relativa '/sendMail' que devuelve 404 en desarrollo local cuando las reescrituras del Hosting
   // no están activas. Usar '/sendMail' como fallback cuando no se provee la variable de entorno.

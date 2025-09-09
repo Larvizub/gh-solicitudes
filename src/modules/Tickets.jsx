@@ -548,7 +548,12 @@ export default function Tickets() {
             })
             .catch(err => {
               console.error('Error enviando notificación', err);
-              setError(`Ticket guardado pero falló envío de correo: ${err.message}`);
+              const msg = err && err.message ? err.message : String(err);
+              if (msg.includes('No se han encontrado destinatarios')) {
+                setError('Ticket guardado, pero no hay destinatarios configurados para enviar correo. Añade asignados o un pool de correo en la configuración.');
+              } else {
+                setError(`Ticket guardado pero falló envío de correo: ${msg}`);
+              }
             });
         } catch (e) {
           console.error('Error preparando notificación', e);

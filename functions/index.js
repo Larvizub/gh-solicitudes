@@ -22,13 +22,36 @@ async function getGraphToken() {
   if (!tenant || !clientId || !clientSecret) throw new Error('Credenciales MS Graph incompletas');
   const now = Math.floor(Date.now()/1000);
   if (tokenCache.token && tokenCache.exp - 60 > now) return tokenCache.token;
+  // Construir parámetros
   const params = new URLSearchParams();
   params.set('client_id', clientId);
   params.set('client_secret', clientSecret);
   params.set('scope', 'https://graph.microsoft.com/.default');
   params.set('grant_type', 'client_credentials');
-  const resp = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, { method:'POST', body: params });
-  if (!resp.ok) throw new Error('Error token Graph ' + await resp.text());
+
+  // Helper simple de reintentos para operaciones fetch/async
+  async function retryAsync(fn, attempts = 3, delay = 500) {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await fn();
+      } catch (e) {
+        lastErr = e;
+        const isLast = i + 1 === attempts;
+        const wait = delay * Math.pow(2, i);
+        console.warn(`retryAsync attempt ${i + 1} failed: ${e && e.message ? e.message : e}`);
+        if (isLast) break;
+        await new Promise(r => setTimeout(r, wait));
+      }
+    }
+    throw lastErr;
+  }
+
+  const resp = await retryAsync(() => fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, { method:'POST', body: params }));
+  if (!resp.ok) {
+    const text = await resp.text().catch(()=>'<no-text>');
+    throw new Error('Error token Graph ' + text);
+  }
   const json = await resp.json();
   tokenCache = { token: json.access_token, exp: now + (json.expires_in||3600) };
   return tokenCache.token;
@@ -107,8 +130,16 @@ function applyCors(req, res) {
   const allowedRaw = (cfg.allowed?.origins || '').trim();
   const allowedList = allowedRaw ? allowedRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
   const allowAll = allowedList.length === 0;
-  const isAllowed = allowAll || (origin && allowedList.includes(origin));
-  const value = isAllowed ? (origin || '*') : (allowAll ? '*' : '');
+  let isAllowed = allowAll || (origin && allowedList.includes(origin));
+  let value = isAllowed ? (origin || '*') : (allowAll ? '*' : '');
+  // Si hay una lista explícita y el origin viene pero NO está en la lista,
+  // permitimos temporalmente el origin (se registra advertencia). Esto evita
+  // bloqueos de preflight cuando el admin no ha configurado allowed.origins.
+  if (!isAllowed && origin) {
+    console.warn('CORS origen no listado pero se permitirá temporalmente:', origin);
+    isAllowed = true;
+    value = origin; // permitir el origin específico
+  }
   if (value) res.set('Access-Control-Allow-Origin', value);
   res.set('Vary','Origin');
   // Permitir credenciales solo si no usamos '*'
@@ -221,13 +252,43 @@ async function sendTicketEmail(baseTicket, context) {
   if (!context?.rawHtml) throw new Error('Se requiere campo html (plantilla generada en frontend)');
   const html = context.rawHtml;
   const mail = buildGraphMail(subject, html, recipients, explicitCc);
-  await client.api(`/users/${userId}/sendMail`).post(mail);
+  // Intentar enviar con reintentos para errores temporales
+  async function postMailWithRetry(attempts = 3) {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        await client.api(`/users/${userId}/sendMail`).post(mail);
+        return;
+      } catch (e) {
+        lastErr = e;
+        const msg = e && e.message ? e.message : String(e);
+        // Log básico y decidir si reintentar (reintentar en errores de red o 5xx)
+        console.warn(`sendMail attempt ${i + 1} failed for ticket ${baseTicket.id || baseTicket.ticketId || '<no-id>'}: ${msg}`);
+        const isTransient = /5\d\d|ECONNRESET|ETIMEDOUT|ENOTFOUND|ECONNREFUSED/i.test(msg) || (e && e.statusCode && e.statusCode >= 500);
+        if (i + 1 < attempts && isTransient) {
+          const wait = 300 * Math.pow(2, i);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+        break;
+      }
+    }
+    throw lastErr;
+  }
+
+  await postMailWithRetry(3);
   return recipients;
 }
 
 export const sendMail = functions.https.onRequest(async (req, res) => {
   try {
-    if (applyCors(req, res)) return;
+    // Aplicar CORS lo antes posible para garantizar cabeceras en responses y en errores
+    console.log('sendMail invoked (pre-CORS)', { method: req.method, url: req.url || req.path, origin: req.headers.origin, userAgent: req.headers['user-agent'] });
+    if (applyCors(req, res)) return; // ya responde 204 para OPTIONS
+    try {
+      const bodyPreview = req.body ? (typeof req.body === 'object' ? Object.keys(req.body).slice(0,10) : String(req.body).slice(0,200)) : null;
+      console.log('sendMail headers keys:', Object.keys(req.headers || {}).slice(0,20), 'bodyPreviewKeysOrText:', bodyPreview);
+    } catch(e) { console.warn('sendMail preview failed', e && e.message); }
     if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
     if (!validateApiKey(req)) return res.status(401).json({ error: 'API Key inválida' });
     if (req.headers['content-type']?.indexOf('application/json') === -1) return res.status(415).json({ error: 'Content-Type application/json requerido' });
@@ -237,14 +298,29 @@ export const sendMail = functions.https.onRequest(async (req, res) => {
     const missing = required.filter(k => !body[k]);
     if (missing.length) return res.status(400).json({ error: 'Faltan campos', campos: missing });
 
-  const sender = cfg.msgraph?.sender; if (!sender) throw new Error('Falta msgraph.sender');
+    // Validaciones de configuración y payload
+    const sender = cfg.msgraph?.sender;
+    if (!sender) return res.status(500).json({ error: 'Configuración incompleta: falta msgraph.sender en funciones' });
+    if (!body.html) return res.status(400).json({ error: 'Payload inválido: field html requerido (plantilla generada en frontend)' });
 
-  // allow frontend to pass explicit to/cc arrays; pass them through to sendTicketEmail
-  const recipients = await sendTicketEmail(body, { actionMsg: body.actionMsg, subject: body.subject, rawHtml: body.html, to: Array.isArray(body.to) ? body.to : null, cc: Array.isArray(body.cc) ? body.cc : null, extraRecipients: body.extraRecipients });
-    res.json({ ok: true, sent: recipients.length, recipients });
+    // allow frontend to pass explicit to/cc arrays; pass them through to sendTicketEmail
+    let recipients = [];
+    try {
+      recipients = await sendTicketEmail(body, { actionMsg: body.actionMsg, subject: body.subject, rawHtml: body.html, to: Array.isArray(body.to) ? body.to : null, cc: Array.isArray(body.cc) ? body.cc : null, extraRecipients: body.extraRecipients });
+      res.json({ ok: true, sent: recipients.length, recipients });
+    } catch (innerErr) {
+      console.error('sendMail -> sendTicketEmail error', innerErr && innerErr.stack ? innerErr.stack : innerErr);
+      // Mapear errores comunes a códigos HTTP claros
+      const msg = innerErr && innerErr.message ? innerErr.message : 'Error interno al enviar correo';
+      if (/Sin destinatarios válidos|Sin destinatarios/i.test(msg)) return res.status(400).json({ error: msg });
+      if (/No se resolvi[eó] el remitente|No se pudo resolver remitente/i.test(msg)) return res.status(500).json({ error: msg });
+      if (/token Graph|Error token Graph/i.test(msg)) return res.status(502).json({ error: msg });
+      return res.status(500).json({ error: msg });
+    }
   } catch (err) {
-    console.error('sendMail error', err);
-    res.status(500).json({ error: err.message || 'Error interno' });
+    console.error('sendMail error (outer)', err && err.stack ? err.stack : err);
+    // If the platform returns a 503, this block may not be reached; still return 500 to caller
+    try { return res.status(500).json({ error: err.message || 'Error interno' }); } catch (e) { console.error('Failed to send error response', e); }
   }
 });
 

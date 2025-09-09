@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import useNotification from '../context/useNotification';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip, IconButton, Divider, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip, IconButton, Divider, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import SendIcon from '@mui/icons-material/Send';
@@ -78,6 +78,9 @@ export default function TicketPage() {
   const [pauseLoading, setPauseLoading] = useState(false);
   const [pauseReasons, setPauseReasons] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  // guardar información de la última notificación que falló para reintento
+  const [failedNotification, setFailedNotification] = useState(null);
+  const [notifRetryLoading, setNotifRetryLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   // Flag para recordar si el usuario estaba originalmente asignado al cargar el ticket
@@ -276,8 +279,9 @@ export default function TicketPage() {
       setPausesArr(a => ([...a, { key: newRef.key, ...newPause }]));
       setIsPausedState(true);
       setSnackbar({ open: true, message: 'Ticket pausado', severity: 'success' });
-      // Enviar notificación por correo sobre la pausa (incluye motivo y comentario)
-      try {
+  // Enviar notificación por correo sobre la pausa (incluye motivo y comentario)
+  let payload = null; // declarado aquí para que el catch pueda acceder a él
+  try {
         const ticketSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}`));
         const ticketObj = ticketSnap.exists() ? ticketSnap.val() : {};
         const depObj = departamentos.find(d => d.id === ticketObj.departamento);
@@ -311,8 +315,8 @@ export default function TicketPage() {
         const creatorEmail = ticketObj.usuarioEmail ? String(ticketObj.usuarioEmail).toLowerCase() : null;
         const normalized = (toList || []).map(e => String(e || '').toLowerCase()).filter(Boolean);
         if (creatorEmail) normalized.push(creatorEmail);
-        const unique = Array.from(new Set(normalized));
-        const payload = buildSendMailPayload({
+  const unique = Array.from(new Set(normalized));
+  payload = buildSendMailPayload({
           ticket: { ...ticketForHtml, to: unique },
           departamento: ticketObj.departamento,
           departamentoNombre,
@@ -321,12 +325,18 @@ export default function TicketPage() {
           htmlOverride: html,
           cc: []
         });
-  await sendTicketMail(payload);
-  // Indicar al usuario que la notificación por correo fue enviada
-  setSnackbar({ open: true, message: 'Notificación de Ticket Pausado enviada', severity: 'success' });
+  if (!ensurePayloadHasRecipients(payload)) {
+    setFailedNotification({ payload, type: 'pause', dbTicketId, message: 'Notificación de Ticket Pausado' });
+    setSnackbar({ open: true, message: 'No hay destinatarios configurados para la notificación (guardada para reintento)', severity: 'warning' });
+  } else {
+    await sendTicketMail(payload);
+    setSnackbar({ open: true, message: 'Notificación de Ticket Pausado enviada', severity: 'success' });
+  }
       } catch (e) {
         console.error('Error enviando notificación de pausa', e);
-        // no bloquear flujo principal
+        // Guardar payload para reintento
+        try { setFailedNotification({ payload, type: 'pause', dbTicketId, message: 'Notificación de Ticket Pausado' }); } catch (err) { console.warn('No se pudo guardar failedNotification', err); }
+        setSnackbar({ open: true, message: 'Falló envío de notificación (ver consola)', severity: 'warning' });
       }
     } catch (e) {
       console.error('Error pausando ticket', e);
@@ -341,73 +351,93 @@ export default function TicketPage() {
     if (!canControlPause) { setError('No tienes permisos para reanudar este ticket'); return; }
     if (!lastPauseKey) { setError('No hay pausa activa registrada'); return; }
     setPauseLoading(true);
+    // capture key early because we'll clear lastPauseKey later
+    const pauseKey = lastPauseKey;
     try {
       const dbInstance = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
       const endTs = Date.now();
-  const dbTicketId = ticketKey || id;
-  await update(dbRef(dbInstance, `tickets/${dbTicketId}/pauses/${lastPauseKey}`), { end: endTs });
-  await update(dbRef(dbInstance, `tickets/${dbTicketId}`), { isPaused: false, pauseEnd: endTs });
-      setPausesArr(a => a.map(p => p.key === lastPauseKey ? { ...p, end: endTs } : p));
+      const dbTicketId = ticketKey || id;
+      // update pause and ticket
+      await update(dbRef(dbInstance, `tickets/${dbTicketId}/pauses/${pauseKey}`), { end: endTs });
+      await update(dbRef(dbInstance, `tickets/${dbTicketId}`), { isPaused: false, pauseEnd: endTs });
+      setPausesArr(a => a.map(p => p.key === pauseKey ? { ...p, end: endTs } : p));
       setIsPausedState(false);
       setLastPauseKey(null);
       setSnackbar({ open: true, message: 'Ticket reanudado', severity: 'success' });
-        // Enviar notificación por correo sobre la reanudación (incluye motivo, comentario y duración de la pausa)
+
+      // Enviar notificación por correo sobre la reanudación (incluye motivo, comentario y duración de la pausa)
+      try {
+        const pauseSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}/pauses/${pauseKey}`));
+        const pauseObj = pauseSnap.exists() ? pauseSnap.val() : null;
+        const ticketSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}`));
+        const ticketObj = ticketSnap.exists() ? ticketSnap.val() : {};
+        const depObj = departamentos.find(d => d.id === ticketObj.departamento);
+        const departamentoNombre = depObj ? depObj.nombre : ticketObj.departamento;
+        const baseUrl = window.location.origin;
+        const ticketForHtml = { ...ticketObj, ticketId: ticketObj.codigo || dbTicketId, departamentoNombre };
+        const motivoNombre = pauseObj && pauseObj.reasonId ? ((pauseReasons.find(r => r.id === pauseObj.reasonId) || {}).nombre || pauseObj.reasonId) : 'Sin motivo';
+        const pausaInicio = pauseObj && pauseObj.start ? Number(pauseObj.start) : null;
+        const pausaFin = endTs;
+        const durMs = (pausaInicio ? (pausaFin - pausaInicio) : null);
+        const durText = durMs ? msToHoursMinutes(durMs) : 'N/A';
+        const resumenCambios = `Ticket reanudado (duración de pausa: ${durText})`;
+        let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
         try {
-          const pauseSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}/pauses/${lastPauseKey}`));
-          const pauseObj = pauseSnap.exists() ? pauseSnap.val() : null;
-          const ticketSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}`));
-          const ticketObj = ticketSnap.exists() ? ticketSnap.val() : {};
-          const depObj = departamentos.find(d => d.id === ticketObj.departamento);
-          const departamentoNombre = depObj ? depObj.nombre : ticketObj.departamento;
-          const baseUrl = window.location.origin;
-          const ticketForHtml = { ...ticketObj, ticketId: ticketObj.codigo || dbTicketId, departamentoNombre };
-          const motivoNombre = pauseObj && pauseObj.reasonId ? ((pauseReasons.find(r => r.id === pauseObj.reasonId) || {}).nombre || pauseObj.reasonId) : 'Sin motivo';
-          const pausaInicio = pauseObj && pauseObj.start ? Number(pauseObj.start) : null;
-          const pausaFin = endTs;
-          const durMs = (pausaInicio ? (pausaFin - pausaInicio) : null);
-          const durText = durMs ? msToHoursMinutes(durMs) : 'N/A';
-          const resumenCambios = `Ticket reanudado (duración de pausa: ${durText})`;
-          let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
-          try {
-            const resumeHtml = `\n<div style="margin-top:16px;padding:12px;border-left:4px solid #4caf50;background:#f0fff4">` +
-              `<strong>Motivo:</strong> ${escapeHtml(motivoNombre)}<br/>` +
-              `<strong>Comentario de pausa:</strong><p style="white-space:pre-wrap">${escapeHtml((pauseObj && pauseObj.comment) || pauseComment || '')}</p>` +
-              `<strong>Duración de la pausa:</strong> ${escapeHtml(durText)}` +
-              `</div>`;
-            html = `${html}${resumeHtml}`;
-          } catch { /* no crítico */ }
-          // destinatarios como en pausa
-          let toList = [];
-          if (ticketObj.asignadoEmails && ticketObj.asignadoEmails.length) {
-            toList = ticketObj.asignadoEmails.slice();
-          } else if (ticketObj.asignados && ticketObj.asignados.length) {
-            const resolved = ticketObj.asignados.map(idu => {
-              const u = usuarios.find(x => x.id === idu);
-              return u ? u.email : null;
-            }).filter(Boolean);
-            toList = resolved;
-          } else if (ticketObj.asignadoEmail) {
-            toList = [ticketObj.asignadoEmail];
+          const resumeHtml = `\n<div style="margin-top:16px;padding:12px;border-left:4px solid #4caf50;background:#f0fff4">` +
+            `<strong>Motivo:</strong> ${escapeHtml(motivoNombre)}<br/>` +
+            `<strong>Comentario de pausa:</strong><p style="white-space:pre-wrap">${escapeHtml((pauseObj && pauseObj.comment) || pauseComment || '')}</p>` +
+            `<strong>Duración de la pausa:</strong> ${escapeHtml(durText)}` +
+            `</div>`;
+          html = `${html}${resumeHtml}`;
+        } catch { /* no crítico */ }
+
+        // destinatarios como en pausa
+        let toList = [];
+        if (ticketObj.asignadoEmails && ticketObj.asignadoEmails.length) {
+          toList = ticketObj.asignadoEmails.slice();
+        } else if (ticketObj.asignados && ticketObj.asignados.length) {
+          const resolved = ticketObj.asignados.map(idu => {
+            const u = usuarios.find(x => x.id === idu);
+            return u ? u.email : null;
+          }).filter(Boolean);
+          toList = resolved;
+        } else if (ticketObj.asignadoEmail) {
+          toList = [ticketObj.asignadoEmail];
+        }
+        const creatorEmail = ticketObj.usuarioEmail ? String(ticketObj.usuarioEmail).toLowerCase() : null;
+        const normalized = (toList || []).map(e => String(e || '').toLowerCase()).filter(Boolean);
+        if (creatorEmail) normalized.push(creatorEmail);
+  const unique = Array.from(new Set(normalized));
+  let payload = null; // declarar antes del try/catch siguiente
+        
+  payload = buildSendMailPayload({
+          ticket: { ...ticketForHtml, to: unique },
+          departamento: ticketObj.departamento,
+          departamentoNombre,
+          subject: `[Ticket reanudado] ${ticketObj.tipo || ''} #${ticketObj.codigo || dbTicketId}`,
+          actionMsg: resumenCambios,
+          htmlOverride: html,
+          cc: []
+        });
+
+        try {
+          if (!ensurePayloadHasRecipients(payload)) {
+            try { setFailedNotification({ payload, type: 'resume', dbTicketId, message: 'Notificación de Ticket Reanudado' }); } catch (err) { console.warn('No se pudo guardar failedNotification', err); }
+            setSnackbar({ open: true, message: 'No hay destinatarios configurados para la notificación de reanudación (guardada para reintento)', severity: 'warning' });
+          } else {
+            await sendTicketMail(payload);
+            setSnackbar({ open: true, message: 'Notificación de Ticket Reanudado enviada', severity: 'success' });
           }
-          const creatorEmail = ticketObj.usuarioEmail ? String(ticketObj.usuarioEmail).toLowerCase() : null;
-          const normalized = (toList || []).map(e => String(e || '').toLowerCase()).filter(Boolean);
-          if (creatorEmail) normalized.push(creatorEmail);
-          const unique = Array.from(new Set(normalized));
-          const payload = buildSendMailPayload({
-            ticket: { ...ticketForHtml, to: unique },
-            departamento: ticketObj.departamento,
-            departamentoNombre,
-            subject: `[Ticket reanudado] ${ticketObj.tipo || ''} #${ticketObj.codigo || dbTicketId}`,
-            actionMsg: resumenCambios,
-            htmlOverride: html,
-            cc: []
-          });
-    await sendTicketMail(payload);
-    // Indicar al usuario que la notificación por correo fue enviada
-    setSnackbar({ open: true, message: 'Notificación de Ticket Reanudado enviada', severity: 'success' });
         } catch (e) {
           console.error('Error enviando notificación de reanudación', e);
+          try { setFailedNotification({ payload, type: 'resume', dbTicketId, message: 'Notificación de Ticket Reanudado' }); } catch (err) { console.warn('No se pudo guardar failedNotification', err); }
+          setSnackbar({ open: true, message: 'Falló envío de notificación (ver consola)', severity: 'warning' });
         }
+      } catch (e) {
+        console.error('Error construyendo/enviando notificación de reanudación', e);
+        // don't override main error handler; just show warning
+        setSnackbar({ open: true, message: 'No se pudo enviar notificación de reanudación', severity: 'warning' });
+      }
     } catch (e) {
       console.error('Error reanudando ticket', e);
       setError('Error al reanudar el ticket');
@@ -415,6 +445,108 @@ export default function TicketPage() {
       setPauseLoading(false);
     }
   };
+
+  // Reintentar envío de notificación fallida
+  const resendNotification = async () => {
+    setNotifRetryLoading(true);
+    try {
+      if (failedNotification && failedNotification.payload) {
+        const { payload } = failedNotification;
+        try {
+          // intentar garantizar destinatarios: creador + asignados
+          const dbTicketId = failedNotification.dbTicketId || ticketKey || id || (payload?.ticket?.ticketId);
+          const dbInstance = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+          if (dbTicketId) {
+            const ticketSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}`));
+            if (ticketSnap.exists()) {
+              const ticketObj = ticketSnap.val();
+              let toList = [];
+              if (ticketObj.asignadoEmails && ticketObj.asignadoEmails.length) toList = ticketObj.asignadoEmails.slice();
+              else if (ticketObj.asignados && ticketObj.asignados.length) {
+                const resolved = ticketObj.asignados.map(idu => { const u = usuarios.find(x => x.id === idu); return u ? u.email : null; }).filter(Boolean);
+                toList = resolved;
+              } else if (ticketObj.asignadoEmail) toList = [ticketObj.asignadoEmail];
+              const creatorEmail = ticketObj.usuarioEmail ? String(ticketObj.usuarioEmail).toLowerCase() : null;
+              const normalized = (toList || []).map(e => String(e || '').toLowerCase()).filter(Boolean);
+              if (creatorEmail) normalized.push(creatorEmail);
+              const unique = Array.from(new Set(normalized));
+              // aplicar al payload
+              if (payload && payload.ticket) payload.ticket.to = unique;
+            }
+          }
+        } catch (e) {
+          console.warn('No se pudo reconstruir destinatarios desde DB, usando payload original', e);
+        }
+        if (!ensurePayloadHasRecipients(payload)) {
+          setSnackbar({ open: true, message: 'No se encontraron destinatarios al reconstruir la notificación', severity: 'error' });
+        } else {
+          await sendTicketMail(payload);
+          setSnackbar({ open: true, message: `${failedNotification.message} reenviada`, severity: 'success' });
+          setFailedNotification(null);
+        }
+        setFailedNotification(null);
+        return;
+      }
+      // Si no hay payload guardado, permitir admin reconstruir con los datos actuales del ticket
+      if (!isAdmin) {
+        setSnackbar({ open: true, message: 'No hay notificación fallida para reintentar', severity: 'info' });
+        return;
+      }
+      // Reconstruir payload mínimo a partir del ticket actual
+      const dbInstance = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+      const dbTicketId = ticketKey || id;
+      const ticketSnap = await get(dbRef(dbInstance, `tickets/${dbTicketId}`));
+      if (!ticketSnap.exists()) { setSnackbar({ open: true, message: 'Ticket no encontrado para reintento', severity: 'error' }); return; }
+      const ticketObj = ticketSnap.val();
+      const depObj = departamentos.find(d => d.id === ticketObj.departamento);
+      const departamentoNombre = depObj ? depObj.nombre : ticketObj.departamento;
+      const baseUrl = window.location.origin;
+      const ticketForHtml = { ...ticketObj, ticketId: ticketObj.codigo || dbTicketId, departamentoNombre };
+      // destinatarios simplificados
+      let toList = [];
+      if (ticketObj.asignadoEmails && ticketObj.asignadoEmails.length) toList = ticketObj.asignadoEmails.slice();
+      else if (ticketObj.asignados && ticketObj.asignados.length) {
+        const resolved = ticketObj.asignados.map(idu => { const u = usuarios.find(x => x.id === idu); return u ? u.email : null; }).filter(Boolean);
+        toList = resolved;
+      } else if (ticketObj.asignadoEmail) toList = [ticketObj.asignadoEmail];
+      const creatorEmail = ticketObj.usuarioEmail ? String(ticketObj.usuarioEmail).toLowerCase() : null;
+      const normalized = (toList || []).map(e => String(e || '').toLowerCase()).filter(Boolean);
+      if (creatorEmail) normalized.push(creatorEmail);
+      const unique = Array.from(new Set(normalized));
+      const payload = buildSendMailPayload({
+        ticket: { ...ticketForHtml, to: unique },
+        departamento: ticketObj.departamento,
+        departamentoNombre,
+        subject: `[Reenvío manual] ${ticketObj.tipo || ''} #${ticketObj.codigo || dbTicketId}`,
+        actionMsg: `Reintento manual de notificación por administrador`,
+        htmlOverride: generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl }),
+        cc: []
+      });
+      if (!ensurePayloadHasRecipients(payload)) {
+        setSnackbar({ open: true, message: 'No hay destinatarios para la notificación reconstruida', severity: 'error' });
+      } else {
+        await sendTicketMail(payload);
+        setSnackbar({ open: true, message: 'Notificación reenviada (reconstruida por admin)', severity: 'success' });
+      }
+    } catch (err) {
+      console.error('Reintento de notificación falló', err);
+      setSnackbar({ open: true, message: 'Reintento falló (ver consola)', severity: 'error' });
+    } finally {
+      setNotifRetryLoading(false);
+    }
+  };
+
+  // Helper: asegurar que el payload contiene destinatarios antes de intentar enviar
+  function ensurePayloadHasRecipients(payload) {
+    try {
+      const t = payload && payload.ticket ? payload.ticket : {};
+      const toArr = Array.isArray(payload?.to) ? payload.to : (Array.isArray(t?.to) ? t.to : []);
+      const normalized = (toArr || []).map(x => String(x || '').toLowerCase()).filter(Boolean).filter(s => /@/.test(s));
+      return normalized.length > 0;
+    } catch {
+      return false;
+    }
+  }
 
   // Add comment handler
   const handleAddComment = async () => {
@@ -1118,9 +1250,23 @@ export default function TicketPage() {
                 </TextField>
                 <TextField size="small" label="Comentario" value={pauseComment} onChange={e => setPauseComment(e.target.value)} disabled={saving} />
                 {!isPausedState ? (
-                  <Button disabled={saving || !canControlPause || pauseLoading} variant="contained" color="warning" onClick={handlePause}>Pausar</Button>
+                  <>
+                    <Button disabled={saving || !canControlPause || pauseLoading} variant="contained" color="warning" onClick={handlePause}>Pausar</Button>
+                    {failedNotification && (
+                      <Button disabled={notifRetryLoading} variant="outlined" color="secondary" onClick={resendNotification} startIcon={notifRetryLoading ? <CircularProgress size={16} /> : null}>
+                        Reintentar notificación
+                      </Button>
+                    )}
+                  </>
                 ) : (
-                  <Button disabled={saving || !canControlPause || pauseLoading} variant="contained" color="success" onClick={handleResume}>Reanudar</Button>
+                  <>
+                    <Button disabled={saving || !canControlPause || pauseLoading} variant="contained" color="success" onClick={handleResume}>Reanudar</Button>
+                    {failedNotification && (
+                      <Button disabled={notifRetryLoading} variant="outlined" color="secondary" onClick={resendNotification} startIcon={notifRetryLoading ? <CircularProgress size={16} /> : null}>
+                        Reintentar notificación
+                      </Button>
+                    )}
+                  </>
                 )}
               </Box>
               {pausesArr && pausesArr.length > 0 && (
@@ -1154,6 +1300,13 @@ export default function TicketPage() {
           {/* botones al final del formulario */}
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
             <Button variant="outlined" onClick={() => navigate('/tickets')} color="inherit" disabled={saving && !justSaved}>Volver</Button>
+            <Tooltip title={failedNotification ? (failedNotification.message || 'Reintentar notificación') : 'Reintentar notificación (reconstruye desde ticket actual)'}>
+              <span>
+                <Button variant="outlined" color="inherit" onClick={resendNotification} disabled={notifRetryLoading} sx={{ ml: 1 }}>
+                  {notifRetryLoading ? <CircularProgress size={16} /> : 'Reintentar notificación'}
+                </Button>
+              </span>
+            </Tooltip>
             <Tooltip placement="bottom" title={saving ? 'Guardando ticket...' : (isNew ? 'Crear ticket' : 'Actualizar ticket')}>
               <span>
                 <Button 
