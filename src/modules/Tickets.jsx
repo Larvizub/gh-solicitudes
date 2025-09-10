@@ -708,7 +708,7 @@ export default function Tickets() {
         >
           <Tab label={<Badge color="primary" badgeContent={assignedTickets.length}>Asignados a mí</Badge>} value="assigned" />
           <Tab label={<Badge color="secondary" badgeContent={createdTickets.length}>Creados por mí</Badge>} value="created" />
-          <Tab label={<Badge color="info" badgeContent={deptTickets.length}>Mi departamento</Badge>} value="dept" />
+          <Tab label={<Badge color="info" badgeContent={deptTickets.length}>Asignados a mi departamento</Badge>} value="dept" />
           <Tab label={<Badge color="warning" badgeContent={deptCreatedTickets.length}>Creados por mi departamento</Badge>} value="deptCreated" />
           {isAdmin && <Tab label={<Badge color="primary" badgeContent={allTickets.length}>Todos</Badge>} value="all" />}
         </Tabs>
