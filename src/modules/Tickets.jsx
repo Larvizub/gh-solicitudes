@@ -160,10 +160,23 @@ export default function Tickets() {
     }
   }, [ticketsTabla]);
 
-  // Estado y utilidades para la vista de tabla (filtro y contador de cerrados)
+  // Estado y utilidades para la vista de tabla (filtro, búsqueda y contador de cerrados)
   const [tableFilter, setTableFilter] = useState('Todos'); // 'Todos'|'Abierto'|'En Proceso'|'Cerrado'
+  const [searchQuery, setSearchQuery] = useState(''); // texto de búsqueda para filtrar tickets
   const closedCount = ticketsTablaSorted.filter(t => t.estado === 'Cerrado').length;
-  const filteredTickets = tableFilter === 'Todos' ? ticketsTablaSorted : ticketsTablaSorted.filter(t => t.estado === tableFilter);
+
+  // helper para comprobar coincidencia de búsqueda (case-insensitive)
+  const matchesSearch = (ticket, q) => {
+    if (!q) return true;
+    const s = String(q).trim().toLowerCase();
+    if (!s) return true;
+    const fields = [ticket.id, ticket.codigo, ticket.tipo, ticket.departamento, ticket.descripcion, ticket.usuario, ticket.subcategoria];
+    return fields.some(f => (f || '').toString().toLowerCase().includes(s));
+  };
+
+  // aplicar filtro por estado y luego búsqueda por texto
+  const stateFiltered = tableFilter === 'Todos' ? ticketsTablaSorted : ticketsTablaSorted.filter(t => t.estado === tableFilter);
+  const filteredTickets = searchQuery ? stateFiltered.filter(t => matchesSearch(t, searchQuery)) : stateFiltered;
   // Paginación simple
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 25;
@@ -808,6 +821,16 @@ export default function Tickets() {
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
               <Chip label={`Cerrados: ${closedCount}`} color="success" size="small" />
+              <TextField
+                size="small"
+                placeholder="Buscar tickets..."
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
+                sx={{ minWidth: { xs: '100%', sm: 240 }, width: { xs: '100%', sm: 'auto' }, mt: { xs: 1, sm: 0 } }}
+                InputProps={{
+                  sx: { borderRadius: 1 },
+                }}
+              />
               <TextField
                 size="small"
                 select
