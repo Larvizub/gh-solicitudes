@@ -59,6 +59,7 @@ export default function Tickets() {
   const [assignedTickets, setAssignedTickets] = useState([]);
   const [createdTickets, setCreatedTickets] = useState([]);
   const [deptTickets, setDeptTickets] = useState([]);
+  const [deptCreatedTickets, setDeptCreatedTickets] = useState([]);
   // tickets holds a superset (used for admin/all view)
   const [allTickets, setAllTickets] = useState([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
@@ -128,6 +129,7 @@ export default function Tickets() {
   const ticketsToRender = viewTab === 'assigned' ? assignedTickets
     : viewTab === 'created' ? createdTickets
     : viewTab === 'dept' ? deptTickets
+    : viewTab === 'deptCreated' ? deptCreatedTickets
     : allTickets;
 
   const [nowTick, setNowTick] = useState(Date.now());
@@ -237,10 +239,11 @@ export default function Tickets() {
       }
 
       // Usuarios
+      let allUsers = [];
       try {
         const usersSnap = await get(ref(dbInstance, 'usuarios'));
         if (usersSnap.exists()) {
-          const allUsers = Object.entries(usersSnap.val()).map(([id, u]) => ({ id, ...u }));
+          allUsers = Object.entries(usersSnap.val()).map(([id, u]) => ({ id, ...u }));
           setUsuarios(allUsers);
         } else {
           setUsuarios([]);
@@ -279,6 +282,20 @@ export default function Tickets() {
         return false;
       };
 
+      // Helper para determinar si un ticket fue creado por alguien del departamento del usuario
+      const matchesDeptCreator = (ticket, allUsers) => {
+        if (!ticket.usuarioEmail || !allUsers || !userDeptCandidates.size) return false;
+        // Buscar el usuario que creó el ticket basándose en su email
+        const creator = allUsers.find(u => (u.email || '').toLowerCase() === (ticket.usuarioEmail || '').toLowerCase());
+        if (!creator) return false;
+        // Verificar si el creador pertenece al mismo departamento
+        const creatorDeptRaw = (creator.departamento || '').trim();
+        if (userDeptCandidates.has(creatorDeptRaw)) return true;
+        // También verificar por ID de departamento
+        const creatorDept = localDepartamentos.find(d => d.nombre === creatorDeptRaw);
+        return creatorDept && userDeptCandidates.has(creatorDept.id);
+      };
+
       // Tickets: para rendimiento, hacer consultas por índices cuando sea posible
       try {
         if (isAdmin) {
@@ -298,6 +315,7 @@ export default function Tickets() {
           setAssignedTickets(all.filter(t => matchesAssignToUser(t, user)));
           setCreatedTickets(all.filter(t => (t.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase()));
           setDeptTickets(all.filter(t => matchesUserDept(t.departamento)));
+          setDeptCreatedTickets(all.filter(t => matchesDeptCreator(t, allUsers)));
         } else {
           // Ejecutar consultas específicas para minimizar lectura completa
           const uid = user?.uid || '';
@@ -331,10 +349,16 @@ export default function Tickets() {
             depts = Object.entries(deptSnapTickets.val()).map(([id, t]) => ({ id, ...t })).filter(t => matchesUserDept(t.departamento));
           }
 
+          // Creados por mi departamento
+          let deptCreated = [];
+          if (deptSnapTickets.exists()) {
+            deptCreated = Object.entries(deptSnapTickets.val()).map(([id, t]) => ({ id, ...t })).filter(t => matchesDeptCreator(t, allUsers));
+          }
+
           // Unir resultados para la vista "allTickets" reducida (solo los relevantes para el usuario)
           // Nota: incluir tickets creados por el usuario también en assignedTickets para que no desaparezcan de su board
           const mergedById = {};
-          [...assigned, ...created, ...depts].forEach(t => { mergedById[t.id] = t; });
+          [...assigned, ...created, ...depts, ...deptCreated].forEach(t => { mergedById[t.id] = t; });
           const merged = Object.values(mergedById);
           // normalize asignados
           merged.forEach(t => {
@@ -354,6 +378,7 @@ export default function Tickets() {
           setAssignedTickets(assignedPlusCreated);
           setCreatedTickets(created);
           setDeptTickets(depts);
+          setDeptCreatedTickets(deptCreated);
         }
   } catch (e) {
         // Algunos errores provienen de reglas de Realtime DB que requieren índices (.indexOn).
@@ -372,6 +397,9 @@ export default function Tickets() {
         setCreatedTickets(all.filter(t => (t.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase()));
         setDeptTickets(all.filter(t => {
           try { return matchesUserDept(t.departamento); } catch { return false; }
+        }));
+        setDeptCreatedTickets(all.filter(t => {
+          try { return matchesDeptCreator(t, allUsers); } catch { return false; }
         }));
       } finally {
         setTicketsLoading(false);
@@ -681,6 +709,7 @@ export default function Tickets() {
           <Tab label={<Badge color="primary" badgeContent={assignedTickets.length}>Asignados a mí</Badge>} value="assigned" />
           <Tab label={<Badge color="secondary" badgeContent={createdTickets.length}>Creados por mí</Badge>} value="created" />
           <Tab label={<Badge color="info" badgeContent={deptTickets.length}>Mi departamento</Badge>} value="dept" />
+          <Tab label={<Badge color="warning" badgeContent={deptCreatedTickets.length}>Creados por mi departamento</Badge>} value="deptCreated" />
           {isAdmin && <Tab label={<Badge color="primary" badgeContent={allTickets.length}>Todos</Badge>} value="all" />}
         </Tabs>
       </Paper>
