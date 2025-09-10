@@ -549,6 +549,13 @@ export default function Tickets() {
           }
           // ensure ticketId shown in HTML uses ticket.codigo when available
           const ticketForHtmlFinal = { ...ticketForHtml, ticketId: ticketData.codigo || ticketIdFinal };
+          
+          // Calcular SLA para incluir en el correo
+          const slaInfo = calculateSlaForTicket(ticketForHtmlFinal);
+          if (slaInfo && slaInfo.slaHours) {
+            ticketForHtmlFinal.slaHours = slaInfo.slaHours;
+          }
+          
           const html = generateTicketEmailHTML({ ticket: ticketForHtmlFinal, baseUrl, extraMessage: resumenCambios });
           // Subject: si cambió estado usarlo, si no, genérico
           const cambioEstado = changes.find(c => c.field === 'estado');
