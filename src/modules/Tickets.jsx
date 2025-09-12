@@ -552,8 +552,11 @@ export default function Tickets() {
           
           // Calcular SLA para incluir en el correo
           const slaInfo = calculateSlaForTicket(ticketForHtmlFinal);
-          if (slaInfo && slaInfo.slaHours) {
-            ticketForHtmlFinal.slaHours = slaInfo.slaHours;
+          if (slaInfo && slaInfo.slaHours != null) {
+            // slaHours = valor objetivo total configurado
+            ticketForHtmlFinal.slaHours = slaInfo.slaHours; // compatibilidad existente
+            ticketForHtmlFinal.slaHoursOriginal = slaInfo.slaHours; // nuevo alias
+            ticketForHtmlFinal.slaHoursExplicit = slaInfo.slaHours; // otro alias para prioridad
           }
           
           const html = generateTicketEmailHTML({ ticket: ticketForHtmlFinal, baseUrl, extraMessage: resumenCambios });

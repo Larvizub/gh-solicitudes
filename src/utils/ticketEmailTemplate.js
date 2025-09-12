@@ -52,10 +52,19 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
 
   // calcular texto de vencimiento (horas hábiles) a partir de campos comunes en ticket
   const computeVencimientoText = () => {
-    const candidates = [ticket.slaHours, ticket.slaHoras, ticket.subcategoriaHoras, ticket.subcategoriaTiempo, ticket.subcategoriaSlaHours];
+    // Prioridad: slaHoursExplicit (valor original configurado) > slaHours (derivado) > otras variantes históricas
+    const candidates = [
+      ticket.slaHoursExplicit,
+      ticket.slaHoursOriginal,
+      ticket.slaHours,
+      ticket.slaHoras,
+      ticket.subcategoriaHoras,
+      ticket.subcategoriaTiempo,
+      ticket.subcategoriaSlaHours
+    ];
     const found = candidates.find(v => v !== undefined && v !== null && String(v).trim() !== '');
     if (found === undefined) return 'El Ticket tiene un tiempo de -- horas habiles asignadas';
-    // si es numérico
+    // si es numérico (aceptar 0 como válido aunque sea raro)
     const n = Number(found);
     if (!isNaN(n)) return `El Ticket tiene un tiempo de ${n} horas habiles asignadas`;
     return `El Ticket tiene un tiempo de ${String(found)} horas habiles asignadas`;
