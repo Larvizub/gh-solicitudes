@@ -51,7 +51,10 @@ export default function TicketPage() {
       setError('');
     }
   }, [error, notify]);
-  const [adjunto, setAdjunto] = useState(null);
+  // Legacy: un solo adjunto (se mantiene para compatibilidad con tickets antiguos)
+  // Eliminado estado legacy adjunto único; se usa attachments
+  // Nuevo: múltiples adjuntos (nuevos seleccionados aún no subidos)
+  const [newAdjuntos, setNewAdjuntos] = useState([]); // File[]
   const [commentsArr, setCommentsArr] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [newCommentFile, setNewCommentFile] = useState(null);
@@ -194,7 +197,21 @@ export default function TicketPage() {
             }
 
             setForm({
-              departamento: t.departamento || '', tipo: t.tipo || '', subcategoria: t.subcategoria || '', descripcion: t.descripcion || '', estado: t.estado || 'Abierto', usuario: t.usuario || '', usuarioEmail: t.usuarioEmail || '', adjuntoUrl: t.adjuntoUrl || '', adjuntoNombre: t.adjuntoNombre || '', asignados: t.asignados || [], codigo: t.codigo || '',
+              departamento: t.departamento || '',
+              tipo: t.tipo || '',
+              subcategoria: t.subcategoria || '',
+              descripcion: t.descripcion || '',
+              estado: t.estado || 'Abierto',
+              usuario: t.usuario || '',
+              usuarioEmail: t.usuarioEmail || '',
+              adjuntoUrl: t.adjuntoUrl || '',
+              adjuntoNombre: t.adjuntoNombre || '',
+              asignados: t.asignados || [],
+              codigo: t.codigo || '',
+              // Migrar adjunto antiguo a arreglo attachments si no existe
+              attachments: Array.isArray(t.attachments)
+                ? t.attachments
+                : (t.adjuntoUrl ? [{ url: t.adjuntoUrl, nombre: t.adjuntoNombre || 'Adjunto' }] : []),
             });
             setOriginalEstado(t.estado || 'Abierto');
             // Guardar si el usuario estaba asignado originalmente (permite quitarse y aún guardar en la misma sesión de reasignación)
@@ -661,22 +678,41 @@ export default function TicketPage() {
 
       let adjUrl = form.adjuntoUrl;
       let adjNombre = form.adjuntoNombre;
-      if (adjunto) {
-        const fref = storageRef(storage, `tickets/${Date.now()}_${adjunto.name}`);
-        await uploadBytes(fref, adjunto);
-        adjUrl = await getDownloadURL(fref);
-        adjNombre = adjunto.name;
-      }
   // eliminados campos y subida de archivos de resolución; las conversaciones reemplazan este flujo
 
+      // Procesamiento de múltiples adjuntos
+      let existingAttachments = Array.isArray(form.attachments) ? [...form.attachments] : [];
+      if (!existingAttachments.length && (adjUrl || form.adjuntoUrl)) {
+        // migrar legacy single si todavía no está
+        existingAttachments.push({ url: adjUrl || form.adjuntoUrl, nombre: adjNombre || form.adjuntoNombre || 'Adjunto' });
+      }
+      const uploadedNew = [];
+      if (newAdjuntos && newAdjuntos.length) {
+        for (const file of newAdjuntos) {
+          try {
+            const upRef = storageRef(storage, `tickets/attachments/${Date.now()}_${file.name}`);
+            const snap = await uploadBytes(upRef, file);
+            const url = await getDownloadURL(snap.ref);
+            uploadedNew.push({ url, nombre: file.name });
+          } catch (e) {
+            console.warn('Error subiendo adjunto', file.name, e);
+          }
+        }
+      }
+      const allAttachments = [...existingAttachments, ...uploadedNew];
+      // Asegurar que adjuntoUrl/Nombre legacy apunten al primero (retrocompatibilidad)
+      if (!adjUrl && allAttachments[0]) {
+        adjUrl = allAttachments[0].url;
+        adjNombre = allAttachments[0].nombre;
+      }
       const ticketData = {
         ...form,
+        attachments: allAttachments,
         usuario: form.usuario || (userData?.nombre ? `${userData.nombre} ${userData.apellido || ''}`.trim() : (user?.email || '')),
         usuarioEmail: user?.email || '',
         estado: form.estado || 'Abierto',
         adjuntoUrl: adjUrl || '',
         adjuntoNombre: adjNombre || '',
-  // resolucion fields removed: use the Conversación para discutir la resolución
         asignados: form.asignados || [],
       };
 
@@ -984,6 +1020,7 @@ export default function TicketPage() {
   // navegar al ticket creado/actualizado: preferir codigo en la URL
   setJustSaved(true);
   setSaving(false);
+  setNewAdjuntos([]); // limpiar selección de nuevos
   setTimeout(() => navigate(`/tickets/${ticketData.codigo || ticketIdFinal}`), 900);
     } catch (e) {
       console.error(e);
@@ -1131,9 +1168,81 @@ export default function TicketPage() {
             </Box>
           )}
           <TextField label="Descripción" multiline minRows={3} value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} disabled={saving || (!isNew && !isAdmin)} />
-          <Box>
-            <Button variant="outlined" component="label" disabled={saving || (!isNew && !isAdmin)}>{adjunto ? adjunto.name : (form.adjuntoNombre || 'Adjuntar archivo')}<input type="file" hidden onChange={e => setAdjunto(e.target.files[0])} /></Button>
-            {(form.adjuntoUrl || adjunto) && <Box sx={{ mt: 1 }}><Typography variant="caption">{(adjunto && adjunto.name) || form.adjuntoNombre}</Typography></Box>}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Button
+                variant="outlined"
+                component="label"
+                disabled={saving || (!isNew && !isAdmin)}
+                sx={{ textTransform: 'none' }}
+              >
+                {newAdjuntos.length ? `${newAdjuntos.length} archivo(s) seleccionados` : 'Seleccionar adjuntos'}
+                <input
+                  type="file"
+                  hidden
+                  multiple
+                  onChange={e => {
+                    const files = Array.from(e.target.files || []);
+                    setNewAdjuntos(prev => [...prev, ...files]);
+                  }}
+                />
+              </Button>
+              {newAdjuntos.length > 0 && (
+                <Button
+                  variant="text"
+                  color="error"
+                  disabled={saving}
+                  onClick={() => setNewAdjuntos([])}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Limpiar selección
+                </Button>
+              )}
+            </Box>
+            {/* Lista de adjuntos ya guardados (form.attachments) */}
+            {Array.isArray(form.attachments) && form.attachments.length > 0 && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>Adjuntos:</Typography>
+                {form.attachments.map((a, idx) => (
+                  <Button
+                    key={idx}
+                    href={a.url}
+                    target="_blank"
+                    size="small"
+                    variant="text"
+                    sx={{ justifyContent: 'flex-start', textTransform: 'none', fontSize: 12, maxWidth: 320 }}
+                  >
+                    📎 {a.nombre || `Adjunto ${idx+1}`}
+                  </Button>
+                ))}
+              </Box>
+            )}
+            {/* Soporte legacy: mostrar si no hay attachments pero sí adjuntoUrl */}
+            {(!Array.isArray(form.attachments) || !form.attachments.length) && form.adjuntoUrl && (
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>Adjunto:</Typography><br />
+                <Button
+                  href={form.adjuntoUrl}
+                  target="_blank"
+                  size="small"
+                  variant="text"
+                  sx={{ textTransform: 'none', fontSize: 12 }}
+                >
+                  📎 {form.adjuntoNombre || 'Adjunto'}
+                </Button>
+              </Box>
+            )}
+            {/* Mostrar selección nueva previa a guardar */}
+            {newAdjuntos.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>Nuevos a subir:</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                  {newAdjuntos.map((f, i) => (
+                    <Typography variant="caption" key={i} sx={{ opacity: 0.85 }}>{f.name}</Typography>
+                  ))}
+                </Box>
+              </Box>
+            )}
           </Box>
           <TextField select label="Estado" value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} disabled={
             saving || isNew || (!isAdmin && !matchesAssignToUser(form, user) && !isCreator && !isSameDepartment) ||
