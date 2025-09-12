@@ -1210,7 +1210,20 @@ export default function TicketPage() {
                     target="_blank"
                     size="small"
                     variant="text"
-                    sx={{ justifyContent: 'flex-start', textTransform: 'none', fontSize: 12, maxWidth: 320 }}
+                    sx={(theme) => ({
+                      justifyContent: 'flex-start',
+                      textTransform: 'none',
+                      fontSize: 12,
+                      maxWidth: 320,
+                      fontWeight: 600,
+                      color: theme.palette.mode === 'dark' ? theme.palette.primary.light : 'inherit',
+                      backgroundColor: theme.palette.mode === 'dark' ? theme.palette.action.hover : 'transparent',
+                      borderRadius: 2,
+                      '&:hover': {
+                        backgroundColor: theme.palette.mode === 'dark' ? theme.palette.primary.dark : theme.palette.action.hover,
+                        color: theme.palette.mode === 'dark' ? theme.palette.primary.contrastText : 'inherit'
+                      }
+                    })}
                   >
                     📎 {a.nombre || `Adjunto ${idx+1}`}
                   </Button>
@@ -1226,7 +1239,18 @@ export default function TicketPage() {
                   target="_blank"
                   size="small"
                   variant="text"
-                  sx={{ textTransform: 'none', fontSize: 12 }}
+                  sx={(theme) => ({
+                    textTransform: 'none',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: theme.palette.mode === 'dark' ? theme.palette.primary.light : 'inherit',
+                    backgroundColor: theme.palette.mode === 'dark' ? theme.palette.action.hover : 'transparent',
+                    borderRadius: 2,
+                    '&:hover': {
+                      backgroundColor: theme.palette.mode === 'dark' ? theme.palette.primary.dark : theme.palette.action.hover,
+                      color: theme.palette.mode === 'dark' ? theme.palette.primary.contrastText : 'inherit'
+                    }
+                  })}
                 >
                   📎 {form.adjuntoNombre || 'Adjunto'}
                 </Button>
