@@ -18,6 +18,7 @@ import workingMsBetween from '../utils/businessHours';
 import { msToHoursMinutes } from '../utils/formatDuration';
 import { generateTicketEmailHTML, buildSendMailPayload } from '../utils/ticketEmailTemplate';
 import { sendTicketMail } from '../services/mailService';
+import { calculateSlaRemaining } from '../utils/slaCalculator';
 
 function padNum(n, len = 4) {
   return String(n).padStart(len, '0');
@@ -88,6 +89,9 @@ export default function TicketPage() {
   const [deleting, setDeleting] = useState(false);
   // Flag para recordar si el usuario estaba originalmente asignado al cargar el ticket
   const [wasOriginallyAssigned, setWasOriginallyAssigned] = useState(false);
+  // Estados para configuraciones SLA
+  const [slaConfigs, setSlaConfigs] = useState({});
+  const [slaSubcats, setSlaSubcats] = useState({});
 
   const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
   const canDelete = !isNew && (isAdmin || (user?.email && form?.usuarioEmail && String(form.usuarioEmail).toLowerCase() === String(user.email).toLowerCase()));
@@ -125,6 +129,11 @@ export default function TicketPage() {
     return false;
   }
 
+  // Helper para calcular SLA usando la función utilitaria
+  const calculateSlaForTicket = (ticket) => {
+    return calculateSlaRemaining(ticket, slaConfigs, slaSubcats, tipos, subcats);
+  };
+
   useEffect(() => {
     const load = async () => {
       if (dbLoading && !ctxDb) return;
@@ -153,6 +162,20 @@ export default function TicketPage() {
         } catch (err) {
           console.warn('Error cargando usuarios', err);
           setUsuarios([]);
+        }
+
+        // SLA configurations
+        try {
+          const [slaConfigSnap, slaSubcatsSnap] = await Promise.all([
+            get(dbRef(dbInstance, 'sla/configs')),
+            get(dbRef(dbInstance, 'sla/subcategorias'))
+          ]);
+          setSlaConfigs(slaConfigSnap.exists() ? slaConfigSnap.val() : {});
+          setSlaSubcats(slaSubcatsSnap.exists() ? slaSubcatsSnap.val() : {});
+        } catch (e) {
+          console.warn('No se pudo cargar configuración SLA', e);
+          setSlaConfigs({});
+          setSlaSubcats({});
         }
 
         if (!isNew) {
@@ -305,6 +328,15 @@ export default function TicketPage() {
         const departamentoNombre = depObj ? depObj.nombre : ticketObj.departamento;
         const baseUrl = window.location.origin;
         const ticketForHtml = { ...ticketObj, ticketId: ticketObj.codigo || dbTicketId, departamentoNombre };
+        
+        // Calcular SLA para incluir en el correo
+        const slaInfo = calculateSlaForTicket(ticketForHtml);
+        if (slaInfo && slaInfo.slaHours != null) {
+          ticketForHtml.slaHours = slaInfo.slaHours;
+          ticketForHtml.slaHoursOriginal = slaInfo.slaHours;
+          ticketForHtml.slaHoursExplicit = slaInfo.slaHours;
+        }
+        
         const motivoNombre = (pauseReasons.find(r => r.id === (pauseReasonId || '')) || {}).nombre || pauseReasonId || 'Sin motivo';
         const resumenCambios = `Ticket puesto en pausa: ${motivoNombre}`;
         let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
@@ -392,6 +424,15 @@ export default function TicketPage() {
         const departamentoNombre = depObj ? depObj.nombre : ticketObj.departamento;
         const baseUrl = window.location.origin;
         const ticketForHtml = { ...ticketObj, ticketId: ticketObj.codigo || dbTicketId, departamentoNombre };
+        
+        // Calcular SLA para incluir en el correo
+        const slaInfo = calculateSlaForTicket(ticketForHtml);
+        if (slaInfo && slaInfo.slaHours != null) {
+          ticketForHtml.slaHours = slaInfo.slaHours;
+          ticketForHtml.slaHoursOriginal = slaInfo.slaHours;
+          ticketForHtml.slaHoursExplicit = slaInfo.slaHours;
+        }
+        
         const motivoNombre = pauseObj && pauseObj.reasonId ? ((pauseReasons.find(r => r.id === pauseObj.reasonId) || {}).nombre || pauseObj.reasonId) : 'Sin motivo';
         const pausaInicio = pauseObj && pauseObj.start ? Number(pauseObj.start) : null;
         const pausaFin = endTs;
@@ -607,6 +648,15 @@ export default function TicketPage() {
         const departamentoNombre = depObj ? depObj.nombre : ticketObj.departamento;
         const baseUrl = window.location.origin;
   const ticketForHtml = { ...ticketObj, ticketId: ticketObj.codigo || dbTicketId, departamentoNombre };
+        
+        // Calcular SLA para incluir en el correo
+        const slaInfo = calculateSlaForTicket(ticketForHtml);
+        if (slaInfo && slaInfo.slaHours != null) {
+          ticketForHtml.slaHours = slaInfo.slaHours;
+          ticketForHtml.slaHoursOriginal = slaInfo.slaHours;
+          ticketForHtml.slaHoursExplicit = slaInfo.slaHours;
+        }
+        
         const resumenCambios = `Nuevo comentario por ${commentData.authorName || commentData.authorEmail}`;
         let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
         // adjuntar el texto del comentario en el body HTML (escapado)
@@ -970,6 +1020,15 @@ export default function TicketPage() {
           const depObj = departamentos.find(d => d.id === latestTicket.departamento);
           const departamentoNombre = depObj ? depObj.nombre : latestTicket.departamento;
           const ticketForHtml = { ...latestTicket, ticketId: latestTicket.codigo || ticketIdFinal, departamentoNombre };
+          
+          // Calcular SLA para incluir en el correo
+          const slaInfo = calculateSlaForTicket(ticketForHtml);
+          if (slaInfo && slaInfo.slaHours != null) {
+            ticketForHtml.slaHours = slaInfo.slaHours;
+            ticketForHtml.slaHoursOriginal = slaInfo.slaHours;
+            ticketForHtml.slaHoursExplicit = slaInfo.slaHours;
+          }
+          
           const resumenCambios = isNew ? 'Creación de ticket' : `Cambio de estado a ${ticketForHtml.estado}`;
           const html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
           const ticketLabel = ticketForHtml.codigo || ticketIdFinal;
