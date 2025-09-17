@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useTheme } from '@mui/material/styles';
 import { ReportesPieChart, ReportesBarChart, ReportesLineChart, ReportesAreaChart, ReportesHorizontalBarChart } from './ReportesCharts';
 
 // ErrorBoundary simple para DataGrid
@@ -60,6 +61,7 @@ export default function Reportes() {
   const [filtroDep, setFiltroDep] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const theme = useTheme();
 
 
   // Filtros y datos para los gráficos
@@ -69,58 +71,105 @@ export default function Reportes() {
     (!filtroEstado || t.estado === filtroEstado)
   );
   // Calcular duración de resolución por ticket (considerando pausas si existen)
-  const computeTicketResolutionMs = (t) => {
+  const computeTicketResolutionMs = React.useCallback((t) => {
     try {
       // obtener timestamps de creado y cerrado
       const createdCandidates = t.createdAt || t.fecha || t.timestamp || t.createdAtTimestamp || t.createdAtMillis;
-      const closedCandidates = t.closedAt || t.closedAtTimestamp || t.cerradoAt || t.fechaCierre || t.updatedAt || t.closedAtMillis;
-      const parseAny = (v) => {
-        if (v === undefined || v === null) return null;
-        if (typeof v === 'number') return v < 1e12 ? v * 1000 : v;
-        if (typeof v === 'string') { const n = parseInt(v,10); if (!isNaN(n)) return n < 1e12 ? n*1000 : n; const d = new Date(v); return isNaN(d.getTime()) ? null : d.getTime(); }
-        if (typeof v === 'object') {
-          if (v.seconds) return Number(v.seconds) * 1000;
-          if (v._seconds) return Number(v._seconds) * 1000;
-          if (v.toMillis) {
-            try { return v.toMillis(); } catch { return null; }
-          }
-        }
-        return null;
-      };
+      // intentar múltiples aliases comunes para fecha de cierre/resolución
+  const closedCandidates = t.closedAt || t.closedAtTimestamp || t.cerradoAt || t.fechaCierre || t.closedAtMillis || t.resolvedAt || t.resolvedAtTimestamp || t['closed_at'] || t.finishedAt || t.resolvedAt || t.resueltoEn || t.resueltoEnTimestamp || null;
+      // Si no hay campo explícito pero el estado indica 'Cerrado', usar updatedAt como respaldo
+      let closedFallback = null;
+      if (!closedCandidates && (String(t.estado || '').toLowerCase() === 'cerrado' || String(t.estado || '').toLowerCase() === 'resuelto' || String(t.estado || '').toLowerCase() === 'finalizado')) {
+        closedFallback = t.updatedAt || t.updated_at || null;
+      }
+      // Reuse shared timestamp parser to correctly handle ISO strings and numeric timestamps
+      const parseAny = (v) => parseAnyTimestamp(v);
       const createdMs = parseAny(createdCandidates) || parseAny(t.created) || null;
-      const closedMs = parseAny(closedCandidates) || null;
-      const endMs = closedMs || Date.now();
-      if (!createdMs) return null;
-      // compute business-hours duration between createdMs and endMs
-      let duration = workingMsBetween(createdMs, endMs);
+      const closedMs = parseAny(closedCandidates) || parseAny(closedFallback) || null;
+      try {
+        console.debug('computeTicketResolutionMs parse', {
+          id: t?.id || t?.key || t?.ticketId || null,
+          createdCandidates, closedCandidates: closedCandidates || closedFallback,
+          parsedCreatedMs: createdMs,
+          parsedClosedMs: closedMs,
+          createdIso: createdMs ? new Date(createdMs).toISOString() : null,
+          closedIso: closedMs ? new Date(closedMs).toISOString() : null,
+        });
+  } catch { /* ignore parse logging errors */ }
+      // Only compute resolution time for tickets that have a closing timestamp
+      if (!createdMs || !closedMs) {
+        try {
+          console.debug('computeTicketResolutionMs missing timestamps:', {
+            id: t?.id || t?.key || t?.ticketId || null,
+            estado: t?.estado,
+            createdCandidates: createdCandidates,
+            closedCandidates: closedCandidates || closedFallback,
+            parsedCreatedMs: createdMs,
+            parsedClosedMs: closedMs,
+          });
+  } catch { /* ignore logging errors */ }
+        return null;
+      }
+      // if created is after closed, swap to attempt recovering a duration
+      let startMs = createdMs;
+      let endMs = closedMs;
+      if (startMs > endMs) {
+        try { console.warn('computeTicketResolutionMs: createdMs > closedMs, swapping to compute positive duration', { id: t?.id, createdMs, closedMs }); } catch { /* ignore */ }
+        const tmp = startMs; startMs = endMs; endMs = tmp;
+      }
+      // compute business-hours duration between startMs and endMs
+      let duration = workingMsBetween(startMs, endMs);
       // subtract pauses but only counting their overlap with business hours
       if (t.pauses) {
         const pausesObj = t.pauses;
         for (const k of Object.keys(pausesObj)) {
           const p = pausesObj[k];
-          const s = parseAny(p.start) || p.start || null;
-          const e = parseAny(p.end) || p.end || null;
+          const s = parseAny(p.start) || null;
+          const e = parseAny(p.end) || null;
           if (!s) continue;
           const ps = Number(s);
-          const pe = e ? Number(e) : endMs; // if active, use endMs
+          const pe = e ? Number(e) : closedMs;
           if (pe > ps) {
-            const overlapMs = workingMsBetween(Math.max(ps, createdMs), Math.min(pe, endMs));
+            const overlapMs = workingMsBetween(Math.max(ps, createdMs), Math.min(pe, closedMs));
             duration -= overlapMs;
           }
         }
+      }
+      if (!duration || duration <= 0) {
+        try { console.debug('computeTicketResolutionMs zero duration details', { id: t?.id, startIso: startMs ? new Date(startMs).toISOString() : null, endIso: endMs ? new Date(endMs).toISOString() : null, duration }); } catch { /* ignore */ }
       }
       return Math.max(0, duration);
     } catch (e) {
       console.warn('Error computing duration for ticket', e);
       return null;
     }
-  };
+  }, [/* no external deps; parse util and workingMsBetween are stable imports */]);
+
+  // Debug helper: log resolution parsing for first few tickets to help diagnose missing values
+  React.useEffect(() => {
+    if (Array.isArray(tickets) && tickets.length) {
+      try {
+        tickets.slice(0, 5).forEach(t => {
+          const ms = computeTicketResolutionMs(t);
+          console.debug('computeTicketResolutionMs sample:', { id: t?.id || t?.key || t?.ticketId || null, estado: t?.estado, resultMs: ms, raw: t });
+        });
+  } catch { /* noop */ }
+    }
+  }, [tickets, computeTicketResolutionMs]);
 
   // Helper para parsear timestamps variados (reutilizable)
   const parseAnyTimestamp = (v) => {
     if (v === undefined || v === null) return null;
     if (typeof v === 'number') return v < 1e12 ? v * 1000 : v;
-    if (typeof v === 'string') { const n = parseInt(v,10); if (!isNaN(n)) return n < 1e12 ? n*1000 : n; const d = new Date(v); return isNaN(d.getTime()) ? null : d.getTime(); }
+    if (typeof v === 'string') {
+      // Intentar parsear como fecha ISO primero (más robusto para strings con '-')
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) return d.getTime();
+      // Si no es una fecha, intentar parsear como número (segundos o ms)
+      const n = parseInt(v, 10);
+      if (!isNaN(n)) return n < 1e12 ? n * 1000 : n;
+      return null;
+    }
     if (typeof v === 'object') {
       if (v.seconds) return Number(v.seconds) * 1000;
       if (v._seconds) return Number(v._seconds) * 1000;
@@ -325,6 +374,34 @@ export default function Reportes() {
     return calculateSlaRemaining(ticket, slaConfigs, slaSubcats, tipos, subcats);
   };
 
+  // Obtener solo las horas de SLA aplicables a un ticket (usa la misma lógica de prioridad que slaCalculator)
+  const computeSlaHoursForTicket = React.useCallback((ticket) => {
+    try {
+      const deptId = ticket._departamentoId || ticket.departamento;
+      // intentar SLA por subcategoría
+      try {
+        const tiposForDept = tipos[deptId] || {};
+        const tipoEntry = Object.entries(tiposForDept).find(([, nombre]) => nombre === ticket.tipo);
+        const tipoId = tipoEntry ? tipoEntry[0] : null;
+        if (tipoId && subcats[deptId] && subcats[deptId][tipoId]) {
+          const subEntries = Object.entries(subcats[deptId][tipoId]);
+          const found = subEntries.find(([, nombre]) => nombre === ticket.subcategoria);
+          const subId = found ? found[0] : null;
+          if (subId && slaSubcats[deptId] && slaSubcats[deptId][tipoId] && slaSubcats[deptId][tipoId][subId]) {
+            const slaConfigItem = slaSubcats[deptId][tipoId][subId];
+            const priority = ticket.prioridad || 'Media';
+            return typeof slaConfigItem === 'object' ? slaConfigItem[priority] : (priority === 'Media' ? slaConfigItem : null);
+          }
+        }
+      } catch { /* ignore and fallback */ }
+      // fallback a SLA por departamento
+      const deptConfig = slaConfigs[deptId] || {};
+      const priority = ticket.prioridad || 'Media';
+      const DEFAULT_SLA = { Alta: 24, Media: 72, Baja: 168 };
+      return deptConfig[priority] ?? DEFAULT_SLA[priority] ?? 72;
+    } catch { return null; }
+  }, [slaConfigs, slaSubcats, tipos, subcats]);
+
   
 
   // Helpers para resolver datos heterogéneos
@@ -484,7 +561,8 @@ export default function Reportes() {
         );
       }
     } },
-    { field: 'usuario', headerName: 'Usuario', width: 160 },
+  { field: 'usuario', headerName: 'Usuario', width: 160 },
+  { field: 'usuarioAsignado', headerName: 'Usuario Asignado', width: 180, renderCell: (params) => <span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{params.row?.usuarioAsignado || ''}</span> },
     { field: 'fecha', headerName: 'Fecha', width: 180, renderCell: (params) => {
       return <span>{resolveDateFromRow(params?.row)}</span>;
     } },
@@ -495,15 +573,24 @@ export default function Reportes() {
       const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
       // Calcular SLA de la subcategoría para decidir estilo (vencido = isExpired)
       const slaInfo = calculateSlaForTicket(row);
-      const isExpired = slaInfo?.isExpired;
+      let isExpired = slaInfo?.isExpired;
+      // Si el ticket está cerrado, calculateSlaForTicket puede devolver null; en ese caso obtener slaHours y comparar con hours
+      if (!isExpired) {
+        try {
+          const slaHours = slaInfo?.slaHours ?? computeSlaHoursForTicket(row);
+          if (slaHours !== null && slaHours !== undefined && hours !== null) {
+            if (hours > Number(slaHours)) isExpired = true;
+          }
+        } catch { /* noop */ }
+      }
       if (hours === null) return <span />;
       return (
         <Chip
           label={`${hours}h`}
           size="small"
-          color={isExpired ? 'error' : (hours <= 12 ? 'warning' : 'success')}
+          color={isExpired ? undefined : (hours <= 12 ? 'warning' : 'success')}
           variant={isExpired ? 'filled' : (hours <= 12 ? 'filled' : 'outlined')}
-          sx={isExpired ? { color: '#fff', fontWeight: 700 } : undefined}
+          sx={isExpired ? { backgroundColor: theme.palette.error.main, color: '#fff', fontWeight: 700 } : undefined}
         />
       );
     } },
@@ -512,7 +599,7 @@ export default function Reportes() {
       const url = params.value || row.adjuntoUrl || row.adjunto?.url || (Array.isArray(row.adjuntos) && row.adjuntos[0]?.url) || row.adjunto;
       return url ? <Button href={url} target="_blank" size="small" color="info" sx={{ fontWeight: 700 }}>Ver</Button> : '';
     } },
-    { field: 'asignadosTexto', headerName: 'Asignados', width: 220, renderCell: (params) => <span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{params.row?.asignadosTexto || ''}</span> },
+  { field: 'asignadosTexto', headerName: 'Reasignados', width: 220, renderCell: (params) => <span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{params.row?.asignadosTexto || ''}</span> },
     { field: 'lastReassignAt', headerName: 'Última Reasignación', width: 180 },
   ];
 
@@ -529,6 +616,25 @@ export default function Reportes() {
       return copy.map(t => {
         let asignadosTexto = '';
         let lastReassignAt = '';
+        // Determinar usuario(s) asignado(s) originalmente
+        let usuarioAsignado = '';
+        try {
+          // Posibles campos que pueden contener info del asignado inicial
+          if (t?.initialAssignees) {
+            if (Array.isArray(t.initialAssignees) && t.initialAssignees.length) usuarioAsignado = resolveAssignedEntry(t.initialAssignees[0]);
+            else usuarioAsignado = resolveAssignedEntry(t.initialAssignees);
+          } else if (t?.asignadosIniciales) {
+            if (Array.isArray(t.asignadosIniciales) && t.asignadosIniciales.length) usuarioAsignado = resolveAssignedEntry(t.asignadosIniciales[0]);
+            else usuarioAsignado = resolveAssignedEntry(t.asignadosIniciales);
+          } else if (t?.asignadoOriginal) {
+            usuarioAsignado = resolveAssignedEntry(t.asignadoOriginal);
+          } else if (Array.isArray(t.asignados) && t.asignados.length) {
+            // Usar el primer asignado como asignado inicial por defecto
+            usuarioAsignado = resolveAssignedEntry(t.asignados[0]);
+          } else if (t.usuario) {
+            usuarioAsignado = resolveAssignedEntry(t.usuario);
+          }
+  } catch { usuarioAsignado = '' }
         if (t?.reassignments) {
           try {
             const arr = Object.values(t.reassignments).filter(Boolean);
@@ -545,7 +651,7 @@ export default function Reportes() {
             }
           } catch { /* noop */ }
         }
-        return { ...t, asignadosTexto, lastReassignAt };
+        return { ...t, asignadosTexto, lastReassignAt, usuarioAsignado };
       });
     } catch {
       return ticketsFiltrados.map(t => ({ ...t }));
@@ -555,7 +661,7 @@ export default function Reportes() {
   // Exportar a Excel
   const handleExportExcel = () => {
     try {
-    const data = ticketsFiltrados.map(t => {
+  const data = ticketsFiltrados.map(t => {
         const slaInfo = calculateSlaForTicket(t);
         let slaText = '-';
         if (slaInfo) {
@@ -578,7 +684,7 @@ export default function Reportes() {
   if (hours !== null && slaCandidate !== null && slaCandidate !== undefined && !isNaN(Number(slaCandidate))) {
     if (hours > Number(slaCandidate)) tiempoLaboral = `${tiempoLaboral} (Excedido)`;
   }
-        // Asignados solo si hay historial de reasignaciones con al menos 1 entrada
+  // Asignados solo si hay historial de reasignaciones con al menos 1 entrada
         let asignadosTexto = '';
         let lastReassignAt = '';
         if (t?.reassignments) {
@@ -597,6 +703,23 @@ export default function Reportes() {
             }
           } catch { /* noop */ }
         }
+        // calcular usuarioAsignado para export
+        let usuarioAsignado = '';
+        try {
+          if (t?.initialAssignees) {
+            if (Array.isArray(t.initialAssignees) && t.initialAssignees.length) usuarioAsignado = resolveAssignedEntry(t.initialAssignees[0]);
+            else usuarioAsignado = resolveAssignedEntry(t.initialAssignees);
+          } else if (t?.asignadosIniciales) {
+            if (Array.isArray(t.asignadosIniciales) && t.asignadosIniciales.length) usuarioAsignado = resolveAssignedEntry(t.asignadosIniciales[0]);
+            else usuarioAsignado = resolveAssignedEntry(t.asignadosIniciales);
+          } else if (t?.asignadoOriginal) {
+            usuarioAsignado = resolveAssignedEntry(t.asignadoOriginal);
+          } else if (Array.isArray(t.asignados) && t.asignados.length) {
+            usuarioAsignado = resolveAssignedEntry(t.asignados[0]);
+          } else if (t.usuario) {
+            usuarioAsignado = resolveAssignedEntry(t.usuario);
+          }
+        } catch { usuarioAsignado = '' }
 
         // Return object (not relied on for column order). We'll build sheet with explicit column order below.
         return {
@@ -605,6 +728,7 @@ export default function Reportes() {
           'Estado': t.estado || '',
           'SLA Restante': slaText,
           'Usuario': t.usuario || '',
+          'Usuario Asignado': usuarioAsignado || (t.usuario || ''),
           'Fecha': resolveDateFromRow(t),
           'Horas cierre (h)': tiempoLaboral,
           'Adjunto': (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
@@ -613,7 +737,7 @@ export default function Reportes() {
         };
       });
       // Build an array-of-arrays (AOA) to guarantee column order matches the DataGrid table
-    const headers = ['Departamento', 'Categoría', 'Estado', 'Vencimiento', 'Usuario', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación'];
+    const headers = ['Departamento', 'Categoría', 'Estado', 'Vencimiento', 'Usuario', 'Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación'];
   // Build rows explicitly to guarantee column order matches the DataGrid table
   const rows = [headers];
       data.forEach(d => {
@@ -623,6 +747,7 @@ export default function Reportes() {
           d['Estado'] || '',
           d['SLA Restante'] || '',
           d['Usuario'] || '',
+          d['Usuario Asignado'] || '',
           d['Fecha'] || '',
           d['Horas cierre (h)'] || '',
           d['Adjunto'] || '',
@@ -716,7 +841,7 @@ export default function Reportes() {
       // Single: mensual
       await addChartSingle(monthlyRef);
 
-      // Preparar datos tabla (sin ID, coincidente con la vista) + columnas de reasignaciones
+    // Preparar datos tabla (sin ID, coincidente con la vista) + columnas de reasignaciones
     const bodyData = ticketsFiltrados.map(t => {
         const slaInfo = calculateSlaForTicket(t);
         let slaText = '-';
@@ -739,7 +864,7 @@ export default function Reportes() {
   if (hours !== null && slaCandidatePdf !== null && slaCandidatePdf !== undefined && !isNaN(Number(slaCandidatePdf))) {
     if (hours > Number(slaCandidatePdf)) tiempoLaboral = `${tiempoLaboral} (Excedido)`;
   }
-        // Asignados y última reasignación (solo si hay historial)
+  // Asignados y última reasignación (solo si hay historial)
         let asignadosTexto = '';
         let lastReassignAt = '';
         if (t?.reassignments) {
@@ -758,14 +883,32 @@ export default function Reportes() {
             }
           } catch { /* noop */ }
         }
+        // calcular usuarioAsignado para PDF export
+        let usuarioAsignado = '';
+        try {
+          if (t?.initialAssignees) {
+            if (Array.isArray(t.initialAssignees) && t.initialAssignees.length) usuarioAsignado = resolveAssignedEntry(t.initialAssignees[0]);
+            else usuarioAsignado = resolveAssignedEntry(t.initialAssignees);
+          } else if (t?.asignadosIniciales) {
+            if (Array.isArray(t.asignadosIniciales) && t.asignadosIniciales.length) usuarioAsignado = resolveAssignedEntry(t.asignadosIniciales[0]);
+            else usuarioAsignado = resolveAssignedEntry(t.asignadosIniciales);
+          } else if (t?.asignadoOriginal) {
+            usuarioAsignado = resolveAssignedEntry(t.asignadoOriginal);
+          } else if (Array.isArray(t.asignados) && t.asignados.length) {
+            usuarioAsignado = resolveAssignedEntry(t.asignados[0]);
+          } else if (t.usuario) {
+            usuarioAsignado = resolveAssignedEntry(t.usuario);
+          }
+        } catch { usuarioAsignado = '' }
         const hasAdj = (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) ? 'Sí' : '';
-  // Order must match DataGrid columns: Departamento, Categoría, Estado, Vencimiento, Usuario, Fecha, Horas cierre (h), Adjunto, Asignados, Última Reasignación
+  // Order must match DataGrid columns: Departamento, Categoría, Estado, Vencimiento, Usuario, Usuario Asignado, Fecha, Horas cierre (h), Adjunto, Asignados, Última Reasignación
         return [
           resolveDepartmentName(t.departamento),
           t.tipo || '',
           t.estado || '',
           slaText,
           t.usuario || '',
+          usuarioAsignado || (t.usuario || ''),
           resolveDateFromRow(t),
           tiempoLaboral,
           hasAdj,
@@ -778,7 +921,7 @@ export default function Reportes() {
         throw new Error('AutoTable plugin no disponible');
       }
     autoTable(doc, {
-  head: [['Departamento', 'Categoría', 'Estado', 'Vencimiento', 'Usuario', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación']],
+  head: [['Departamento', 'Categoría', 'Estado', 'Vencimiento', 'Usuario', 'Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación']],
         body: bodyData,
         startY: cursorY,
         margin: { left: 40, right: 40 },
