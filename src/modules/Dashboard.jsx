@@ -15,6 +15,7 @@ import { useAuth } from '../context/useAuth';
 
 export default function Dashboard() {
   const theme = useTheme();
+  const chartColor = theme.palette.mode === 'dark' ? '#F2B05F' : theme.palette.primary.main;
   useEffect(() => {
     try {
       const navEntries = (performance && performance.getEntriesByType) ? performance.getEntriesByType('navigation') : null;
@@ -495,7 +496,7 @@ export default function Dashboard() {
                   ]}
                   width={240}
                   height={180}
-                  colors={[theme.palette.primary.main]}
+                  colors={[chartColor]}
                 />
               ) : (
                 <Typography variant="body2" color="text.secondary">
@@ -661,7 +662,7 @@ export default function Dashboard() {
                   {
                     data: dataLinea.map((d) => (isNaN(d.count) ? 0 : d.count)),
                     label: "Tickets",
-                    color: theme.palette.primary.main,
+                    color: chartColor,
                   },
                 ]}
                 width={260}

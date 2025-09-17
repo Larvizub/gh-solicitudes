@@ -50,7 +50,7 @@ export function ReportesPieChart({ data, title }) {
 
 export function ReportesBarChart({ data, title, xKey, yKey }) {
   const theme = useTheme();
-  const barFill = theme.palette.primary.main;
+  const barFill = theme.palette.mode === 'dark' ? '#F2B05F' : theme.palette.primary.main;
   return (
     <Box sx={{ width: '100%', maxWidth: 600, mx: 'auto', mb: 3 }}>
       <Typography variant="subtitle1" align="center" sx={{ mb: 1 }}>{title}</Typography>
@@ -110,6 +110,7 @@ export function ReportesAreaChart({ data, title, xKey, areas = [] }) {
 
 export function ReportesHorizontalBarChart({ data, title, xKey, yKey }) {
   const theme = useTheme();
+  const barFill = theme.palette.mode === 'dark' ? '#F2B05F' : theme.palette.primary.main;
   return (
     <Box sx={{ width: '100%', maxWidth: 600, mx: 'auto', mb: 3 }}>
       <Typography variant="subtitle1" align="center" sx={{ mb: 1 }}>{title}</Typography>
@@ -118,7 +119,7 @@ export function ReportesHorizontalBarChart({ data, title, xKey, yKey }) {
           <XAxis type="number" />
           <YAxis dataKey={xKey} type="category" />
           <Tooltip />
-          <Bar dataKey={yKey} fill={theme.palette.primary.main} />
+          <Bar dataKey={yKey} fill={barFill} />
         </BarChart>
       </ResponsiveContainer>
     </Box>

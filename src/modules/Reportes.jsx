@@ -131,20 +131,7 @@ export default function Reportes() {
     return null;
   };
 
-  // Tiempo transcurrido real entre creación y cierre (ms). Si no está cerrado devuelve null.
-  const computeTicketElapsedMs = (t) => {
-    try {
-      const createdCandidates = t.createdAt || t.fecha || t.timestamp || t.createdAtTimestamp || t.createdAtMillis || t.created;
-      const closedCandidates = t.closedAt || t.closedAtTimestamp || t.cerradoAt || t.fechaCierre || t.updatedAt || t.closedAtMillis;
-      const createdMs = parseAnyTimestamp(createdCandidates) || null;
-      const closedMs = parseAnyTimestamp(closedCandidates) || null;
-      if (!createdMs || !closedMs) return null;
-      const diff = Number(closedMs) - Number(createdMs);
-      return diff >= 0 ? diff : null;
-    } catch {
-      return null;
-    }
-  };
+  
 
   // Average resolution time per departamento (hours)
   const deptDurations = {};
@@ -502,9 +489,23 @@ export default function Reportes() {
       return <span>{resolveDateFromRow(params?.row)}</span>;
     } },
     { field: 'tiempoLaboralMs', headerName: 'Horas cierre (h)', width: 160, renderCell: (params) => {
-      const ms = params.row && computeTicketElapsedMs(params.row);
+      // Usar duración de resolución en horas (horas laborales descontando pausas)
+      const row = params.row || {};
+      const ms = computeTicketResolutionMs(row);
       const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
-      return <span>{hours !== null ? `${hours}h` : ''}</span>;
+      // Calcular SLA de la subcategoría para decidir estilo (vencido = isExpired)
+      const slaInfo = calculateSlaForTicket(row);
+      const isExpired = slaInfo?.isExpired;
+      if (hours === null) return <span />;
+      return (
+        <Chip
+          label={`${hours}h`}
+          size="small"
+          color={isExpired ? 'error' : (hours <= 12 ? 'warning' : 'success')}
+          variant={isExpired ? 'filled' : (hours <= 12 ? 'filled' : 'outlined')}
+          sx={isExpired ? { color: '#fff', fontWeight: 700 } : undefined}
+        />
+      );
     } },
     { field: 'adjuntoUrl', headerName: 'Adjunto', width: 120, renderCell: (params) => {
       const row = params?.row || {};
@@ -569,8 +570,14 @@ export default function Reportes() {
           }
         }
   // Tiempo hasta cierre en horas (decimal 1d) — consistente con la vista de la tabla
-  const ms = computeTicketElapsedMs(t);
-  const tiempoLaboral = (ms !== null && ms !== undefined) ? `${Math.round((ms / (1000 * 60 * 60)) * 10) / 10}h` : '';
+  const ms = computeTicketResolutionMs(t);
+  const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
+  let tiempoLaboral = hours !== null ? `${hours}h` : '';
+  // Determinar SLA de la subcategoría (si está disponible en el ticket)
+  const slaCandidate = t?.subcategoriaHoras ?? t?.subcategoriaTiempo ?? t?.slaHours ?? null;
+  if (hours !== null && slaCandidate !== null && slaCandidate !== undefined && !isNaN(Number(slaCandidate))) {
+    if (hours > Number(slaCandidate)) tiempoLaboral = `${tiempoLaboral} (Excedido)`;
+  }
         // Asignados solo si hay historial de reasignaciones con al menos 1 entrada
         let asignadosTexto = '';
         let lastReassignAt = '';
@@ -725,8 +732,13 @@ export default function Reportes() {
           }
         }
   // Tiempo hasta cierre en horas (decimal 1d)
-  const ms = computeTicketElapsedMs(t);
-  const tiempoLaboral = (ms !== null && ms !== undefined) ? `${Math.round((ms / (1000 * 60 * 60)) * 10) / 10}h` : '';
+  const ms = computeTicketResolutionMs(t);
+  const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
+  let tiempoLaboral = hours !== null ? `${hours}h` : '';
+  const slaCandidatePdf = t?.subcategoriaHoras ?? t?.subcategoriaTiempo ?? t?.slaHours ?? null;
+  if (hours !== null && slaCandidatePdf !== null && slaCandidatePdf !== undefined && !isNaN(Number(slaCandidatePdf))) {
+    if (hours > Number(slaCandidatePdf)) tiempoLaboral = `${tiempoLaboral} (Excedido)`;
+  }
         // Asignados y última reasignación (solo si hay historial)
         let asignadosTexto = '';
         let lastReassignAt = '';
