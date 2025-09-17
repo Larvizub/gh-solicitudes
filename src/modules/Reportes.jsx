@@ -732,12 +732,12 @@ export default function Reportes() {
           'Fecha': resolveDateFromRow(t),
           'Horas cierre (h)': tiempoLaboral,
           'Adjunto': (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
-          'Asignados': asignadosTexto,
+    'Reasignados': asignadosTexto,
           'Última Reasignación': lastReassignAt,
         };
       });
       // Build an array-of-arrays (AOA) to guarantee column order matches the DataGrid table
-    const headers = ['Departamento', 'Categoría', 'Estado', 'Vencimiento', 'Usuario', 'Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación'];
+  const headers = ['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Reasignados', 'Última Reasignación'];
   // Build rows explicitly to guarantee column order matches the DataGrid table
   const rows = [headers];
       data.forEach(d => {
@@ -751,7 +751,7 @@ export default function Reportes() {
           d['Fecha'] || '',
           d['Horas cierre (h)'] || '',
           d['Adjunto'] || '',
-          d['Asignados'] || '',
+          d['Reasignados'] || '',
           d['Última Reasignación'] || ''
         ]);
       });
@@ -921,7 +921,7 @@ export default function Reportes() {
         throw new Error('AutoTable plugin no disponible');
       }
     autoTable(doc, {
-  head: [['Departamento', 'Categoría', 'Estado', 'Vencimiento', 'Usuario', 'Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Asignados', 'Última Reasignación']],
+  head: [['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Reasignados', 'Última Reasignación']],
         body: bodyData,
         startY: cursorY,
         margin: { left: 40, right: 40 },
