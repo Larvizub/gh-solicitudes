@@ -295,12 +295,18 @@ export default function TicketPage() {
   // Pause / Resume handlers
   const canControlPause = isAdmin || matchesAssignToUser(form, user) || isSameDepartment;
   const canComment = () => {
+    // Permitir comentarios a usuarios autenticados.
+    // Reglas:
+    // - Admin siempre puede comentar.
+    // - El creador siempre puede comentar.
+    // - Cualquier miembro del mismo departamento puede comentar, incluso si el ticket fue reasignado a otra persona del departamento.
+    // - Los asignados también pueden comentar.
     if (!user) return false;
     if (isAdmin) return true;
     const myEmail = (user?.email || '').toLowerCase();
     if (form.usuarioEmail && String(form.usuarioEmail).toLowerCase() === myEmail) return true;
+    if (isSameDepartment) return true; // permite comentar incluso si el ticket está 'Cerrado' o 'En Proceso'
     if (matchesAssignToUser(form, user)) return true;
-    if (isSameDepartment) return true;
     return false;
   };
   const handlePause = async () => {
