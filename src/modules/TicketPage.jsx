@@ -885,8 +885,11 @@ export default function TicketPage() {
                       const ticketForHtml = { ...prev, ...allowedUpdate, ticketId: prev.codigo || dbTicketId, departamentoNombre };
                       const resumenCambios = 'Ticket reasignado';
                       let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
+                      // Asegurar incluir al creador del ticket en los destinatarios
+                      const creatorEmail = (prev && prev.usuarioEmail) ? String(prev.usuarioEmail).toLowerCase() : null;
+                      const toWithCreator = Array.from(new Set([...(resolvedEmails || []), ...(creatorEmail ? [creatorEmail] : [])]));
                       const payload = buildSendMailPayload({
-                        ticket: { ...ticketForHtml, to: resolvedEmails },
+                        ticket: { ...ticketForHtml, to: toWithCreator },
                         departamento: prev.departamento,
                         departamentoNombre,
                         subject: `[Reasignado] ${prev.tipo || ''} #${prev.codigo || dbTicketId}`,
@@ -982,8 +985,11 @@ export default function TicketPage() {
                       const ticketForHtml = { ...prev, ...ticketData, ticketId: prev.codigo || dbTicketId2, departamentoNombre };
                       const resumenCambios = 'Ticket reasignado';
                       let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
+                      // Incluir creador del ticket en destinatarios
+                      const creatorEmailAdmin = (prev && prev.usuarioEmail) ? String(prev.usuarioEmail).toLowerCase() : null;
+                      const toWithCreatorAdmin = Array.from(new Set([...(resolvedEmails || []), ...(creatorEmailAdmin ? [creatorEmailAdmin] : [])]));
                       const payload = buildSendMailPayload({
-                        ticket: { ...ticketForHtml, to: resolvedEmails },
+                        ticket: { ...ticketForHtml, to: toWithCreatorAdmin },
                         departamento: prev.departamento,
                         departamentoNombre,
                         subject: `[Reasignado] ${prev.tipo || ''} #${prev.codigo || dbTicketId2}`,
