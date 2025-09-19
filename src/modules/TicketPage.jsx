@@ -18,7 +18,7 @@ import workingMsBetween from '../utils/businessHours';
 import { msToHoursMinutes } from '../utils/formatDuration';
 import { generateTicketEmailHTML, buildSendMailPayload } from '../utils/ticketEmailTemplate';
 import { sendTicketMail } from '../services/mailService';
-import { calculateSlaRemaining } from '../utils/slaCalculator';
+import { calculateSlaRemaining, getSlaHours, computeResolutionHoursForTicket } from '../utils/slaCalculator';
 
 function padNum(n, len = 4) {
   return String(n).padStart(len, '0');
@@ -107,10 +107,39 @@ export default function TicketPage() {
   }, [userData, usuarios, user]);
 
   const isSameDepartment = React.useMemo(() => {
-    const deptForm = form?.departamento || '';
-    if (!deptForm) return false;
-    return String((userDepartamento || '')).toLowerCase() === String(deptForm).toLowerCase();
-  }, [userDepartamento, form?.departamento]);
+    try {
+      const deptFormRaw = form?.departamento || '';
+      if (!deptFormRaw) return false;
+      const normalize = (s) => String(s || '').toLowerCase().trim();
+      // Resolve form department: could be id or name
+      const depObj = departamentos.find(d => String(d.id) === String(deptFormRaw));
+      const formDepId = depObj ? String(depObj.id) : String(deptFormRaw);
+      const formDepName = depObj ? String(depObj.nombre || '') : String(deptFormRaw);
+
+      // Resolve user department: userData.departamento may be id or name; fallback to usuarios list
+      let uDeptId = userData?.departamento || null;
+      let uDeptName = '';
+      if (uDeptId) {
+        const udep = departamentos.find(d => String(d.id) === String(uDeptId));
+        uDeptName = udep ? String(udep.nombre || '') : String(uDeptId);
+      } else {
+        const me = usuarios.find(u => (u.id && u.id === (user?.uid || '')) || ((u.email || '').toLowerCase() === (user?.email || '').toLowerCase()));
+        if (me) {
+          uDeptId = me.departamento || me.departamentoId || null;
+          uDeptName = me.departamentoNombre || me.departamento || '';
+        }
+      }
+
+      // Compare by id or by name (normalized)
+      if (uDeptId && String(uDeptId) === String(formDepId)) return true;
+      if (normalize(uDeptName) && normalize(formDepName) && normalize(uDeptName) === normalize(formDepName)) return true;
+      // Also handle case where both are just the same raw string
+      if (normalize(userDepartamento) && normalize(deptFormRaw) && normalize(userDepartamento) === normalize(deptFormRaw)) return true;
+      return false;
+    } catch {
+      return false;
+    }
+  }, [form?.departamento, departamentos, usuarios, userDepartamento, userData, user]);
 
   // helper to check whether the current user is one of the assignees (compat across shapes)
   function matchesAssignToUser(ticket, userObj) {
@@ -889,6 +918,13 @@ export default function TicketPage() {
                       const departamentoNombre = depObj ? depObj.nombre : prev.departamento;
                       const baseUrl = window.location.origin;
                       const ticketForHtml = { ...prev, ...allowedUpdate, ticketId: prev.codigo || dbTicketId, departamentoNombre };
+                      // Añadir horas SLA y tiempo de resolución (si aplica) para que aparezca en el email
+                      try {
+                        const slaVal = getSlaHours(ticketForHtml, slaConfigs, slaSubcats, tipos, subcats);
+                        if (slaVal != null) ticketForHtml.slaHours = slaVal;
+                        const tiempo = computeResolutionHoursForTicket(ticketForHtml);
+                        if (tiempo != null) ticketForHtml.tiempoLaboral = tiempo;
+                      } catch { /* ignore */ }
                       const resumenCambios = 'Ticket reasignado';
                       let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
                       // Asegurar incluir al creador del ticket en los destinatarios
@@ -989,6 +1025,13 @@ export default function TicketPage() {
                       const departamentoNombre = depObj ? depObj.nombre : prev.departamento;
                       const baseUrl = window.location.origin;
                       const ticketForHtml = { ...prev, ...ticketData, ticketId: prev.codigo || dbTicketId2, departamentoNombre };
+                      // Añadir horas SLA y tiempo de resolución para admin emails
+                      try {
+                        const slaVal = getSlaHours(ticketForHtml, slaConfigs, slaSubcats, tipos, subcats);
+                        if (slaVal != null) ticketForHtml.slaHours = slaVal;
+                        const tiempo = computeResolutionHoursForTicket(ticketForHtml);
+                        if (tiempo != null) ticketForHtml.tiempoLaboral = tiempo;
+                      } catch { /* ignore */ }
                       const resumenCambios = 'Ticket reasignado';
                       let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
                       // Incluir creador del ticket en destinatarios
@@ -1040,6 +1083,15 @@ export default function TicketPage() {
             ticketForHtml.slaHoursOriginal = slaInfo.slaHours;
             ticketForHtml.slaHoursExplicit = slaInfo.slaHours;
           }
+          // Asegurar que incluso si el ticket está cerrado, los emails de admin muestren slaHours y tiempo de resolución
+          try {
+            if (!ticketForHtml.slaHours) {
+              const slaVal = getSlaHours(ticketForHtml, slaConfigs, slaSubcats, tipos, subcats);
+              if (slaVal != null) ticketForHtml.slaHours = slaVal;
+            }
+            const tiempo = computeResolutionHoursForTicket(ticketForHtml);
+            if (tiempo != null) ticketForHtml.tiempoLaboral = tiempo;
+          } catch { /* ignore */ }
           
           const resumenCambios = isNew ? 'Creación de ticket' : `Cambio de estado a ${ticketForHtml.estado}`;
           const html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
