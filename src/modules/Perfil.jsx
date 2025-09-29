@@ -194,10 +194,10 @@ export default function Perfil() {
   const snap = await get(ref(dbToUse, 'tickets'));
         if (snap.exists()) {
           const all = Object.entries(snap.val()).map(([id, t]) => ({ id, ...t }));
-          const creados = all.filter(t => t.usuario && (t.usuario === user.email || t.usuario.includes(nombre)));
+          const creados = all.filter(t => t.usuarioEmail === user.email);
           setTicketsCreados(creados.length);
           setTicketsCerrados(creados.filter(t => t.estado === 'Cerrado').length);
-          setUltimosTickets(creados.sort((a, b) => (b.fecha || 0) - (a.fecha || 0)).slice(0, 3));
+          setUltimosTickets(creados.sort((a, b) => (b.fecha || 0) - (a.fecha || 0)).slice(0, 2));
         }
       } catch {
         setTicketsCreados(0);
@@ -206,7 +206,7 @@ export default function Perfil() {
       }
     };
     fetchTickets();
-  }, [user, nombre, ctxDb, recinto]);
+  }, [user, ctxDb, recinto]);
 
   const handleUpdate = async (e) => {
     e.preventDefault();
