@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Outlet } from 'react-router-dom';
 import Box from '@mui/material/Box';
-import Toolbar from '@mui/material/Toolbar';
 import { useMediaQuery } from '@mui/material';
 import AppBarHeroica from './AppBarHeroica';
 import SidebarHeroica from './SidebarHeroica';
