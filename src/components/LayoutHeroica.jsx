@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Outlet } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Toolbar from '@mui/material/Toolbar';
+import { useMediaQuery } from '@mui/material';
 import AppBarHeroica from './AppBarHeroica';
 import SidebarHeroica from './SidebarHeroica';
 import { useAuth } from '../context/useAuth';
@@ -11,6 +12,8 @@ import { useDb } from '../context/DbContext';
 function LayoutHeroica() {
   const { userData, user } = useAuth();
   const navigate = useNavigate();
+  const isDesktop = useMediaQuery('(min-width:768px)');
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     if (!userData) return;
@@ -28,7 +31,8 @@ function LayoutHeroica() {
 
   // Altura de la AppBar
   const APP_BAR_HEIGHT = 64;
-  const SIDEBAR_WIDTH = mini ? 64 : 240;
+  const effectiveMini = isDesktop ? !isHovered : mini;
+  const SIDEBAR_WIDTH = effectiveMini ? 64 : 240;
 
   return (
     <Box sx={{ display: 'flex' }}>
@@ -54,7 +58,14 @@ function LayoutHeroica() {
           zIndex: (theme) => theme.zIndex.appBar - 1,
         }}
       >
-        <SidebarHeroica open variant="permanent" role={role} mini={mini} />
+        <SidebarHeroica 
+          open 
+          variant="permanent" 
+          role={role} 
+          mini={effectiveMini}
+          onMouseEnter={() => isDesktop && setIsHovered(true)}
+          onMouseLeave={() => isDesktop && setIsHovered(false)}
+        />
       </Box>
       {/* Contenido principal con margen izquierdo y superior */}
       <Box

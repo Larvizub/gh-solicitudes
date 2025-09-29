@@ -45,7 +45,7 @@ const estandarItems = [
 ];
 
 
-const SidebarHeroica = ({ role, mini, variant, open, onClose, sx }) => {
+const SidebarHeroica = ({ role, mini, variant, open, onClose, onMouseEnter, onMouseLeave, sx }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { userData, user } = useAuth();
@@ -61,6 +61,8 @@ const SidebarHeroica = ({ role, mini, variant, open, onClose, sx }) => {
       variant={variant}
       open={open}
       onClose={onClose}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       sx={{
         width: SIDEBAR_WIDTH,
         flexShrink: 0,
