@@ -10,10 +10,9 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import MenuIcon from '@mui/icons-material/Menu';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import Box from '@mui/material/Box';
 
-export default function AppBarHeroica({ onMenuClick, onMiniToggle, isMini, recinto }) {
+export default function AppBarHeroica({ onMenuClick, recinto }) {
   const { user, userData, logout } = useAuth();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
@@ -44,15 +43,6 @@ export default function AppBarHeroica({ onMenuClick, onMiniToggle, isMini, recin
           sx={{ mr: 2, display: { sm: 'none' } }}
         >
           <MenuIcon />
-        </IconButton>
-        <IconButton
-          color="inherit"
-          aria-label="minimizar barra lateral"
-          edge="start"
-          onClick={onMiniToggle}
-          sx={{ mr: 2, display: { xs: 'none', sm: 'inline-flex' } }}
-        >
-          <ChevronLeftIcon style={{ transform: isMini ? 'rotate(180deg)' : 'none' }} />
         </IconButton>
         <Box
           component="img"

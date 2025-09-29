@@ -25,19 +25,17 @@ function LayoutHeroica() {
   const role = userData?.rol || 'estandar';
   const { recinto } = useDb();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mini, setMini] = useState(false);
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
-  const handleMiniToggle = () => setMini((prev) => !prev);
 
   // Altura de la AppBar
   const APP_BAR_HEIGHT = 64;
-  const effectiveMini = isDesktop ? !isHovered : mini;
+  const effectiveMini = isDesktop ? !isHovered : false;
   const SIDEBAR_WIDTH = effectiveMini ? 64 : 240;
 
   return (
     <Box sx={{ display: 'flex' }}>
       {/* AppBar con zIndex superior */}
-      <AppBarHeroica onMenuClick={handleDrawerToggle} onMiniToggle={handleMiniToggle} isMini={mini} recinto={recinto} />
+      <AppBarHeroica onMenuClick={handleDrawerToggle} recinto={recinto} />
       {/* Sidebar temporal para móvil */}
       <SidebarHeroica
         open={mobileOpen}
