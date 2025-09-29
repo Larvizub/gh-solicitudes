@@ -56,6 +56,7 @@ function LayoutHeroica() {
           left: 0,
           height: `calc(100vh - ${APP_BAR_HEIGHT}px)`,
           zIndex: (theme) => theme.zIndex.appBar - 1,
+          transition: 'width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         }}
       >
         <SidebarHeroica 
@@ -77,6 +78,7 @@ function LayoutHeroica() {
           ml: { sm: `${SIDEBAR_WIDTH}px` },
           mt: `${APP_BAR_HEIGHT}px`,
           minWidth: 0,
+          transition: 'width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), margin-left 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         }}
       >
         {/* Renderizar rutas hijas */}

@@ -66,12 +66,12 @@ const SidebarHeroica = ({ role, mini, variant, open, onClose, onMouseEnter, onMo
       sx={{
         width: SIDEBAR_WIDTH,
         flexShrink: 0,
-        transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1)',
+        transition: 'width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
           '& .MuiDrawer-paper': {
           width: SIDEBAR_WIDTH,
           boxSizing: 'border-box',
           overflowX: 'hidden',
-          transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1), background 0.3s',
+          transition: 'width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), background 0.3s, transform 0.4s ease',
           background: theme => mini ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.85)') : 'background.paper',
           backdropFilter: mini ? 'blur(4px)' : 'none',
           boxShadow: mini ? 3 : 0,
