@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Box, Typography, Paper, Grid, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Button, TextField, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Alert } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import { ref, get, set } from 'firebase/database';
@@ -45,9 +45,12 @@ export default function Sla() {
   const [loading, setLoading] = useState(true);
   const [editDialog, setEditDialog] = useState({ open: false, departamento: null, prioridad: 'Alta', value: '' });
   const [subcatDialog, setSubcatDialog] = useState({ open: false, depId: null, tipoId: null, subId: null, prioridad: 'Alta', value: '' });
-  const [scanResult, setScanResult] = useState({ total: 0, within: 0, breaches: [] });
+  const [scanResult, setScanResult] = useState({ total: 0, within: 0, breaches: [], scanned: false });
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [ticketsLoaded, setTicketsLoaded] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [selectedDept, setSelectedDept] = useState('');
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -55,22 +58,19 @@ export default function Sla() {
       try {
         const dbInstance = ctxDb || (recinto ? await getDbForRecinto(recinto) : null);
         if (!dbInstance) return setLoading(false);
-        const [depSnap, ticketsSnap, slaSnap, tiposSnap, subSnap, slaSubSnap] = await Promise.all([
+        const [depSnap, slaSnap] = await Promise.all([
           get(ref(dbInstance, 'departamentos')),
-          get(ref(dbInstance, 'tickets')),
           get(ref(dbInstance, 'sla/configs')),
-          get(ref(dbInstance, 'tiposTickets')),
-          get(ref(dbInstance, 'subcategoriasTickets')),
-          get(ref(dbInstance, 'sla/subcategorias')),
         ]);
         const deps = depSnap.exists() ? Object.entries(depSnap.val()).map(([id, nombre]) => ({ id, nombre })) : [];
         setDepartamentos(deps);
-        const t = ticketsSnap.exists() ? Object.entries(ticketsSnap.val()).map(([id, ticket]) => ({ id, ...ticket })) : [];
-        setTickets(t);
+        // No cargar tickets inicialmente
+        setTickets([]);
   setConfigs(slaSnap.exists() ? slaSnap.val() : {});
-  setTipos(tiposSnap.exists() ? tiposSnap.val() : {});
-  setSubcats(subSnap.exists() ? subSnap.val() : {});
-  setSlaSubcats(slaSubSnap.exists() ? slaSubSnap.val() : {});
+  // No cargar tipos, subcats, slaSubcats inicialmente
+  setTipos({});
+  setSubcats({});
+  setSlaSubcats({});
       } catch (e) {
         console.error('Error cargando datos SLA', e);
       } finally {
@@ -80,15 +80,52 @@ export default function Sla() {
     fetchAll();
   }, [ctxDb, recinto]);
 
-  // NOTE: no early return here to preserve hook call order; loading UI is handled in JSX below
+  // Función para cargar datos de un departamento
+  const loadDeptData = useCallback(async (depId) => {
+    if (!depId || tipos[depId]) return; // ya cargado
+    try {
+      const dbInstance = ctxDb || (recinto ? await getDbForRecinto(recinto) : null);
+      if (!dbInstance) return;
+      const [tiposSnap, subSnap, slaSubSnap] = await Promise.all([
+        get(ref(dbInstance, `tiposTickets/${depId}`)),
+        get(ref(dbInstance, `subcategoriasTickets/${depId}`)),
+        get(ref(dbInstance, `sla/subcategorias/${depId}`)),
+      ]);
+      setTipos(prev => ({ ...prev, [depId]: tiposSnap.exists() ? tiposSnap.val() : {} }));
+      setSubcats(prev => ({ ...prev, [depId]: subSnap.exists() ? subSnap.val() : {} }));
+      setSlaSubcats(prev => ({ ...prev, [depId]: slaSubSnap.exists() ? slaSubSnap.val() : {} }));
+    } catch (e) {
+      console.error('Error cargando datos del departamento', e);
+    }
+  }, [ctxDb, recinto, tipos]);
 
+  // Cargar datos cuando cambie selectedDept
   useEffect(() => {
-    // recalcular scan cada vez que tickets o configs cambian
-    const runScan = () => {
+    if (selectedDept) {
+      loadDeptData(selectedDept);
+    }
+  }, [selectedDept, loadDeptData]);
+
+  // Función para escanear cumplimiento SLA
+  const runScan = async () => {
+    setScanning(true);
+    try {
+      let currentTickets = tickets;
+      if (!ticketsLoaded) {
+        // Cargar tickets solo cuando se necesiten
+        const dbInstance = ctxDb || (recinto ? await getDbForRecinto(recinto) : null);
+        if (dbInstance) {
+          const ticketsSnap = await get(ref(dbInstance, 'tickets'));
+          currentTickets = ticketsSnap.exists() ? Object.entries(ticketsSnap.val()).map(([id, ticket]) => ({ id, ...ticket })) : [];
+          setTickets(currentTickets);
+          setTicketsLoaded(true);
+        }
+      }
+
       const breaches = [];
       let within = 0;
       let total = 0;
-      tickets.forEach(t => {
+      currentTickets.forEach(t => {
         const created = parseTimestampCandidate(t);
         if (!created) return; // no podemos evaluar
         const closed = parseClosedTimestamp(t);
@@ -127,10 +164,14 @@ export default function Sla() {
           within += 1;
         }
       });
-      setScanResult({ total, within, breaches: breaches.sort((a,b) => b.elapsed - a.elapsed) });
-    };
-    runScan();
-  }, [tickets, configs, tipos, subcats, slaSubcats]);
+      setScanResult({ total, within, breaches: breaches.sort((a,b) => b.elapsed - a.elapsed), scanned: true });
+    } catch (e) {
+      console.error('Error en scan SLA', e);
+      setError('Error al escanear cumplimiento SLA');
+    } finally {
+      setScanning(false);
+    }
+  };
 
   // ...existing code...
 
@@ -247,6 +288,14 @@ export default function Sla() {
             <Grid item xs={12} md={6}>
               <Paper sx={{ p: { xs: 1, sm: 2 }, borderRadius: 2 }} elevation={3}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Configuración de SLA (por Subcategoría)</Typography>
+                <Box sx={{ mb: 2 }}>
+                  <TextField select fullWidth label="Filtrar por Departamento" value={selectedDept} onChange={e => setSelectedDept(e.target.value)} size="small">
+                    <MenuItem value="">Todos los departamentos</MenuItem>
+                    {departamentos.map(dep => (
+                      <MenuItem key={dep.id} value={dep.id}>{dep.nombre}</MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
                 <TableContainer sx={{ display: { xs: 'none', sm: 'block' }, overflowX: 'auto' }}>
                 <Table size="small">
                   <TableHead>
@@ -261,10 +310,10 @@ export default function Sla() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {subcatRows.length === 0 && (
-                      <TableRow><TableCell colSpan={7}>No hay subcategorías</TableCell></TableRow>
+                    {subcatRows.filter(row => !selectedDept || row.depId === selectedDept).length === 0 && (
+                      <TableRow><TableCell colSpan={7}>No hay subcategorías {selectedDept ? 'para este departamento' : ''}</TableCell></TableRow>
                     )}
-                    {subcatRows.map(row => {
+                    {subcatRows.filter(row => !selectedDept || row.depId === selectedDept).map(row => {
                       const { depId, tipoId, subId, nombre } = row;
                       const slaObj = (slaSubcats && slaSubcats[depId] && slaSubcats[depId][tipoId] && slaSubcats[depId][tipoId][subId]);
                       const getVal = (p) => {
@@ -298,9 +347,9 @@ export default function Sla() {
 
                 {/* Mobile: render cards */}
                 <Box sx={{ display: { xs: 'block', sm: 'none' }, mt: 1 }}>
-                  {subcatRows.length === 0 ? (
-                    <Typography variant="body2">No hay subcategorías</Typography>
-                  ) : subcatRows.map(row => {
+                  {subcatRows.filter(row => !selectedDept || row.depId === selectedDept).length === 0 ? (
+                    <Typography variant="body2">No hay subcategorías {selectedDept ? 'para este departamento' : ''}</Typography>
+                  ) : subcatRows.filter(row => !selectedDept || row.depId === selectedDept).map(row => {
                     const { depId, tipoId, subId, nombre } = row;
                     const slaObj = (slaSubcats && slaSubcats[depId] && slaSubcats[depId][tipoId] && slaSubcats[depId][tipoId][subId]);
                     const getVal = (p) => {
@@ -336,92 +385,53 @@ export default function Sla() {
             <Grid item xs={12} md={6}>
               <Paper sx={{ p: { xs: 1, sm: 2 }, borderRadius: 2 }} elevation={3}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Resumen y cumplimiento</Typography>
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexDirection: { xs: 'column', sm: 'row' } }}>
-                  <Chip label={`Total evaluables: ${scanResult.total}`} />
-                  <Chip label={`Dentro SLA: ${scanResult.within}`} color="success" />
-                  <Chip label={`Incumplidos: ${scanResult.breaches.length}`} color="error" />
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
+                  <Button variant="contained" onClick={runScan} disabled={loading || scanning}>
+                    {scanning ? 'Escaneando...' : 'Escanear cumplimiento'}
+                  </Button>
+                  {scanResult.scanned && (
+                    <>
+                      <Chip label={`Total evaluables: ${scanResult.total}`} />
+                      <Chip label={`Dentro SLA: ${scanResult.within}`} color="success" />
+                      <Chip label={`Incumplidos: ${scanResult.breaches.length}`} color="error" />
+                    </>
+                  )}
                 </Box>
 
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2">Incumplimientos (más recientes primero)</Typography>
-                  <TableContainer sx={{ overflowX: 'auto' }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Ticket</TableCell>
-                        <TableCell>Dept</TableCell>
-                        <TableCell>Prioridad</TableCell>
-                        <TableCell>Horas</TableCell>
-                        <TableCell>Objetivo (h)</TableCell>
-                        <TableCell>Estado</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {scanResult.breaches.length === 0 && (
-                        <TableRow><TableCell colSpan={6}>Sin incumplimientos detectados</TableCell></TableRow>
-                      )}
-                      {scanResult.breaches.map(b => (
-                        <TableRow key={b.ticket.id}>
-                          <TableCell>{b.ticket.tipo} #{b.ticket.id}</TableCell>
-                          <TableCell>{departamentos.find(d => d.id === b.ticket.departamento)?.nombre || b.ticket.departamento}</TableCell>
-                          <TableCell>{b.ticket.prioridad || 'Media'}</TableCell>
-                          <TableCell>{Math.round(b.elapsed)}</TableCell>
-                          <TableCell>{b.slaHours}</TableCell>
-                          <TableCell>{b.closed ? 'Cerrado (incumplimiento)' : 'Abierto (en retraso)'}</TableCell>
+                {scanResult.scanned && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2">Incumplimientos (más recientes primero)</Typography>
+                    <TableContainer sx={{ overflowX: 'auto' }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Ticket</TableCell>
+                          <TableCell>Dept</TableCell>
+                          <TableCell>Prioridad</TableCell>
+                          <TableCell>Horas</TableCell>
+                          <TableCell>Objetivo (h)</TableCell>
+                          <TableCell>Estado</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  </TableContainer>
-                </Box>
-              </Paper>
-            </Grid>
-            <Grid item xs={12}>
-              <Paper sx={{ p: { xs: 1, sm: 2 }, borderRadius: 2 }} elevation={3}>
-                <Typography variant="h6" sx={{ mb: 2 }}>SLA por Subcategoría</Typography>
-                <TableContainer sx={{ overflowX: 'auto' }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Departamento</TableCell>
-                      <TableCell>Tipo</TableCell>
-                      <TableCell>Subcategoría</TableCell>
-                      <TableCell>Objetivos (h) [Alta/Media/Baja]</TableCell>
-                      <TableCell>Acciones</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {Object.entries(subcats || {}).length === 0 && (
-                      <TableRow><TableCell colSpan={5}>No hay subcategorías</TableCell></TableRow>
-                    )}
-                    {subcatRows.length === 0 ? (
-                      <TableRow><TableCell colSpan={5}>No hay subcategorías</TableCell></TableRow>
-                    ) : (
-                      subcatRows.map(row => {
-                        const { depId, tipoId, subId, nombre } = row;
-                        const slaObj = (slaSubcats && slaSubcats[depId] && slaSubcats[depId][tipoId] && slaSubcats[depId][tipoId][subId]);
-                        const display = (p) => {
-                          if (slaObj == null) return '-';
-                          if (typeof slaObj === 'object') return slaObj[p] ?? '-';
-                          return p === 'Media' ? slaObj : '-';
-                        };
-                        const altaVal = (slaSubcats && slaSubcats[depId] && slaSubcats[depId][tipoId] && slaSubcats[depId][tipoId][subId] && (typeof slaSubcats[depId][tipoId][subId] === 'object' ? (slaSubcats[depId][tipoId][subId]['Alta']||'') : (slaSubcats[depId][tipoId][subId]||''))) || '';
-                        return (
-                          <TableRow key={`${depId}-${tipoId}-${subId}`}>
-                            <TableCell>{departamentos.find(d=>d.id===depId)?.nombre || depId}</TableCell>
-                            <TableCell>{(tipos && tipos[depId] && tipos[depId][tipoId]) || tipoId}</TableCell>
-                            <TableCell>{nombre}</TableCell>
-                            <TableCell>{`${display('Alta') || '-'} / ${display('Media') || '-'} / ${display('Baja') || '-'}`}</TableCell>
-                            <TableCell>
-                              <Button size="small" variant="outlined" onClick={() => setSubcatDialog({ open: true, depId, tipoId, subId, prioridad: 'Alta', value: String(altaVal) })}>Editar SLA</Button>
-                            </TableCell>
+                      </TableHead>
+                      <TableBody>
+                        {scanResult.breaches.length === 0 && (
+                          <TableRow><TableCell colSpan={6}>Sin incumplimientos detectados</TableCell></TableRow>
+                        )}
+                        {scanResult.breaches.map(b => (
+                          <TableRow key={b.ticket.id}>
+                            <TableCell>{b.ticket.tipo} #{b.ticket.id}</TableCell>
+                            <TableCell>{departamentos.find(d => d.id === b.ticket.departamento)?.nombre || b.ticket.departamento}</TableCell>
+                            <TableCell>{b.ticket.prioridad || 'Media'}</TableCell>
+                            <TableCell>{Math.round(b.elapsed)}</TableCell>
+                            <TableCell>{b.slaHours}</TableCell>
+                            <TableCell>{b.closed ? 'Cerrado (incumplimiento)' : 'Abierto (en retraso)'}</TableCell>
                           </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-                </TableContainer>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    </TableContainer>
+                  </Box>
+                )}
               </Paper>
             </Grid>
           </Grid>
