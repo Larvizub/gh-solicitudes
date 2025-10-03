@@ -7,6 +7,54 @@ import { auth, db as defaultDb } from '../firebase/firebaseConfig';
 import { useDb } from './DbContext';
 import { AuthContext } from './AuthContextInternal';
 
+// Lógica de dominios permitidos (copiada de Login.jsx para consistencia)
+const ALLOWED_DOMAINS = {
+  GRUPO_HEROICA: 'grupoheroica.com',
+  CCCI: 'cccartagena.com',
+  CCCR: 'costaricacc.com',
+  CEVP: 'valledelpacifico.co',
+};
+
+const ADMIN_EXCEPTIONS = ['admin@costaricacc.com', 'admin@grupoheroica.com'];
+const ADMIN_DOMAIN = 'grupoheroica.com';
+
+const isAdminEmail = (email) => {
+  if (!email) return false;
+  const lc = email.toLowerCase();
+  if (ADMIN_EXCEPTIONS.includes(lc)) return true;
+  if (lc.endsWith(`@${ADMIN_DOMAIN}`)) return true;
+  return false;
+};
+
+const extractEmbeddedDomainFromGuest = (localPart) => {
+  if (!localPart) return null;
+  const marker = '#ext#';
+  const lc = localPart.toLowerCase();
+  const idx = lc.indexOf(marker);
+  if (idx === -1) return null;
+  const before = localPart.slice(0, idx);
+  const segments = before.split('_');
+  const candidate = segments[segments.length - 1];
+  if (candidate && candidate.includes('.')) return candidate.toLowerCase();
+  return null;
+};
+
+const isEmailAllowedForRecinto = (email, recintoKey) => {
+  if (!email) return false;
+  const lc = email.toLowerCase();
+  if (isAdminEmail(lc)) return true;
+  const parts = lc.split('@');
+  if (parts.length !== 2) return false;
+  const domain = parts[1];
+  const allowed = ALLOWED_DOMAINS[recintoKey];
+  if (!allowed) return false;
+  if (domain === allowed || domain.endsWith('.' + allowed)) return true;
+  const local = parts[0];
+  const embedded = extractEmbeddedDomainFromGuest(local);
+  if (embedded) return embedded === allowed || embedded.endsWith('.' + allowed);
+  return false;
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -112,24 +160,23 @@ export function AuthProvider({ children }) {
           }
 
           if (!foundCorpAuth) {
-            setDbAccessError('permission-denied');
-            const recintoKeys = Object.keys(RECINTO_DB_MAP || {});
-            for (const key of recintoKeys) {
-              try {
-                const otherDb = await (await import('../firebase/multiDb')).getDbForRecinto(key);
-                if (!otherDb) continue;
-                const snap = await get(ref(otherDb, `usuarios/${firebaseUser.uid}`));
-                if (snap && snap.exists()) {
-                  data = snap.val();
-                  // no cambiamos el recinto automáticamente, solo usamos los datos
-                  break;
-                }
-              } catch (err) {
-                // Ignorar permission-denied u otros errores al inspeccionar otras DBs
-                const isPerm = err && (err.code?.includes('permission-denied') || String(err).toLowerCase().includes('permission denied'));
-                if (!isPerm) console.debug('AuthContext: error inspeccionando otras DBs', err && err.message ? err.message : err);
-              }
+            // SEGURIDAD: No buscar automáticamente en otras bases de datos
+            // Solo permitir acceso si está explícitamente autorizado para corporativo
+            // o si el dominio del usuario permite acceso a la base de datos seleccionada
+            console.warn('AuthContext: Usuario no autorizado para acceder a esta base de datos');
+            console.debug('AuthContext: Usuario:', firebaseUser.email, 'Recinto actual: contexto de DbContext');
+
+            // Verificar si el usuario debería tener acceso basado en su dominio
+            // Esto es una verificación adicional de seguridad
+            const currentRecinto = localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA';
+            if (isEmailAllowedForRecinto(firebaseUser.email, currentRecinto)) {
+              console.debug('AuthContext: Usuario tiene dominio válido para este recinto, pero permission-denied sugiere configuración incorrecta');
+            } else {
+              console.warn('AuthContext: Usuario NO tiene dominio válido para este recinto');
             }
+
+            setDbAccessError('permission-denied');
+            // NO buscar en otras DBs - esto era un agujero de seguridad
           }
         }
 
@@ -289,6 +336,25 @@ export function AuthProvider({ children }) {
             needsDepartmentSelection: isMicrosoftCandidate && !candidatoDeptFromName,
             rol: (firebaseUser.email === 'admin@costaricacc.com') ? 'admin' : 'estandar',
           };
+
+          // SEGURIDAD: Solo crear usuario si tiene permisos válidos para esta base de datos
+          const currentRecinto = localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA';
+          const hasValidDomain = isEmailAllowedForRecinto(firebaseUser.email, currentRecinto);
+          const isSuperAdmin = SUPER_ADMINS.includes(String(firebaseUser.email || '').toLowerCase());
+
+          if (!hasValidDomain && !isSuperAdmin) {
+            console.warn('AuthContext: Usuario no tiene permisos para crear registro en esta base de datos', {
+              email: firebaseUser.email,
+              recinto: currentRecinto,
+              hasValidDomain,
+              isSuperAdmin
+            });
+            setDbAccessError('permission-denied');
+            // No crear usuario - denegar acceso
+            setUserData(null);
+            setLoading(false);
+            return;
+          }
 
           // Intentar persistir en la DB seleccionada; si no hay DB, intentar la por defecto
           try {
