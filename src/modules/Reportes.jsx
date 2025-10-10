@@ -29,6 +29,7 @@ import { ref, get } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
 import { useAuth } from '../context/useAuth';
+import { canViewAllTickets, isAdminRole } from '../utils/roles';
 import workingMsBetween from '../utils/businessHours';
 import { calculateSlaRemaining } from '../utils/slaCalculator';
 // (msToHoursMinutes removed — Reportes now shows decimal hours)
@@ -300,9 +301,10 @@ export default function Reportes() {
   const ticketsSnap = await get(ref(dbInstance, 'tickets'));
         if (ticketsSnap.exists()) {
           const all = Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t }));
-          // Si el usuario NO es admin, filtrar tickets a los del/los departamento(s) del usuario
-          const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
-          if (!isAdmin) {
+          // Si el usuario NO es admin ni tiene permiso de ver todos (ej. gerencia), filtrar tickets a los del/los departamento(s) del usuario
+          const isAdmin = isAdminRole(userData);
+          const canSeeAll = canViewAllTickets(userData);
+          if (!(isAdmin || canSeeAll)) {
             const userDeptRaw = (userData?.departamento || '').toString().trim();
             const matchedDep = userDeptRaw ? deps.find(d => String(d.nombre).toLowerCase() === String(userDeptRaw).toLowerCase() || String(d.id) === String(userDeptRaw)) : null;
             const userDeptCandidates = new Set([userDeptRaw, matchedDep?.id, matchedDep?.nombre].filter(Boolean));

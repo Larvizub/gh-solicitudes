@@ -300,7 +300,7 @@ export default function Tickets() {
 
       // Tickets: para rendimiento, hacer consultas por índices cuando sea posible
       try {
-        if (isAdmin) {
+        if (isAdmin || canSeeAll) {
           const ticketsSnap = await get(ref(dbInstance, "tickets"));
           const all = ticketsSnap.exists() ? Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t })) : [];
           // normalize asignados field
@@ -408,7 +408,7 @@ export default function Tickets() {
       }
     };
     fetchData();
-  }, [success, ctxDb, recinto, userData, isAdmin, dbLoading, user, tiposFromCtx, subcatsFromCtx]);
+  }, [success, ctxDb, recinto, userData, isAdmin, canSeeAll, dbLoading, user, tiposFromCtx, subcatsFromCtx]);
 
   React.useEffect(() => {
     if (error) {
@@ -722,7 +722,7 @@ export default function Tickets() {
           <Tab label={<Badge color="secondary" badgeContent={createdTickets.length}>Creados por mí</Badge>} value="created" />
           <Tab label={<Badge color="info" badgeContent={deptTickets.length}>Asignados a mi departamento</Badge>} value="dept" />
           <Tab label={<Badge color="warning" badgeContent={deptCreatedTickets.length}>Creados por mi departamento</Badge>} value="deptCreated" />
-          {isAdmin && <Tab label={<Badge color="primary" badgeContent={allTickets.length}>Todos</Badge>} value="all" />}
+          {(isAdmin || canSeeAll) && <Tab label={<Badge color="primary" badgeContent={allTickets.length}>Todos</Badge>} value="all" />}
         </Tabs>
       </Paper>
       {error && (
