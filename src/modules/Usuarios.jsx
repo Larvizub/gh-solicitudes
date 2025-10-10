@@ -360,6 +360,7 @@ export default function Usuarios() {
             onChange={e => setForm(f => ({ ...f, rol: e.target.value }))}
           >
             <MenuItem value="estandar">Estandar</MenuItem>
+            <MenuItem value="gerencia">Gerencia General</MenuItem>
             <MenuItem value="admin">Admin</MenuItem>
           </TextField>
         </DialogContent>

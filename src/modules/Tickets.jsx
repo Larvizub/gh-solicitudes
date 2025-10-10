@@ -41,6 +41,7 @@ import { storage } from "../firebase/firebaseConfig";
 import { getDbForRecinto } from '../firebase/multiDb';
 import { useDb } from '../context/DbContext';
 import { useAuth } from "../context/useAuth";
+import { canViewAllTickets, isAdminRole } from '../utils/roles';
 import useNotification from '../context/useNotification';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -89,13 +90,14 @@ export default function Tickets() {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, ticketId: null });
   const [deleting, setDeleting] = useState(false);
   
-  const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
+  const isAdmin = isAdminRole(userData);
+  const canSeeAll = canViewAllTickets(userData);
 
   // Ajustar vista inicial cuando cambie role
   useEffect(() => {
-    if (isAdmin) setViewTab('all');
+    if (canSeeAll) setViewTab('all');
     else setViewTab('assigned');
-  }, [isAdmin]);
+  }, [canSeeAll]);
 
   // Helper para determinar si un ticket está asignado al usuario
   const matchesAssignToUser = (ticket, userObj) => {

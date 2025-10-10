@@ -49,7 +49,7 @@ const SidebarHeroica = ({ role, mini, variant, open, onClose, onMouseEnter, onMo
   const navigate = useNavigate();
   const location = useLocation();
   const { userData, user } = useAuth();
-  // Determinar rol efectivo: si el usuario autenticado tiene isSuperAdmin o rol 'admin', forzar admin
+  // Determinar rol efectivo: solo super-admin o rol 'admin' obtienen items administrativos
   const effectiveRole = (userData?.isSuperAdmin || userData?.rol === 'admin') ? 'admin' : (role || 'estandar');
   const filteredItems = effectiveRole === 'admin' ? adminItems : estandarItems;
   // Altura de la AppBar

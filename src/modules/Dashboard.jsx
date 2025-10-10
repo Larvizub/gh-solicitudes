@@ -12,6 +12,7 @@ import { BarChart, PieChart, LineChart } from "@mui/x-charts";
 import { ref, get } from "firebase/database";
 import { useDb } from '../context/DbContext';
 import { useAuth } from '../context/useAuth';
+import { canViewAllTickets, isAdminRole } from '../utils/roles';
 
 export default function Dashboard() {
   const theme = useTheme();
@@ -74,8 +75,9 @@ export default function Dashboard() {
     fetchData();
   }, [ctxDb, recinto]);
 
-  // Determinar si es admin
-  const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
+  // Determinar si es admin y si puede ver todos los tickets
+  const isAdmin = isAdminRole(userData);
+  const canSeeAll = canViewAllTickets(userData);
   // El valor guardado en userData suele ser el NOMBRE del departamento, no el id
   const userDeptName = userData?.departamento && String(userData.departamento).trim();
   const userDeptIdFromName = userDeptName ? (departamentos.find(d => d.nombre === userDeptName)?.id) : undefined;
@@ -115,7 +117,7 @@ export default function Dashboard() {
   };
 
   // Tickets visibles según rol (admin ve todo, usuario solo los de su departamento)
-  const viewTickets = isAdmin ? tickets : tickets.filter(t => matchesUserDepartment(t.departamento));
+  const viewTickets = canSeeAll ? tickets : tickets.filter(t => matchesUserDepartment(t.departamento));
   // Si no admin y aún no conocemos su departamento, no mostrar datos (vista vacía segura)
   const effectiveTickets = React.useMemo(() => ((!isAdmin && !userDeptId) ? [] : viewTickets), [isAdmin, userDeptId, viewTickets]);
 
