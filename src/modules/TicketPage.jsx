@@ -18,6 +18,7 @@ import workingMsBetween from '../utils/businessHours';
 import { msToHoursMinutes } from '../utils/formatDuration';
 import { generateTicketEmailHTML, buildSendMailPayload } from '../utils/ticketEmailTemplate';
 import { sendTicketMail } from '../services/mailService';
+import { markTicketAsInProcess } from '../services/ticketService';
 import { calculateSlaRemaining, getSlaHours, computeResolutionHoursForTicket } from '../utils/slaCalculator';
 
 function padNum(n, len = 4) {
@@ -141,6 +142,16 @@ export default function TicketPage() {
     }
   }, [form?.departamento, departamentos, usuarios, userDepartamento, userData, user]);
 
+  // Helper: puede iniciar si está asignado o es del mismo departamento
+  const canInitiate = React.useMemo(() => {
+    try {
+      if (!form) return false;
+      if (!user) return false;
+      if (matchesAssignToUser(form, user)) return true;
+      return isSameDepartment;
+    } catch { return false; }
+  }, [form, user, isSameDepartment]);
+
   // helper to check whether the current user is one of the assignees (compat across shapes)
   function matchesAssignToUser(ticket, userObj) {
     if (!ticket || !userObj) return false;
@@ -159,9 +170,9 @@ export default function TicketPage() {
   }
 
   // Helper para calcular SLA usando la función utilitaria
-  const calculateSlaForTicket = React.useCallback((ticket) => {
+  const calculateSlaForTicket = (ticket) => {
     return calculateSlaRemaining(ticket, slaConfigs, slaSubcats, tipos, subcats);
-  }, [slaConfigs, slaSubcats, tipos, subcats]);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -268,89 +279,6 @@ export default function TicketPage() {
             setOriginalEstado(t.estado || 'Abierto');
             // Guardar si el usuario estaba asignado originalmente (permite quitarse y aún guardar en la misma sesión de reasignación)
             try { setWasOriginallyAssigned(matchesAssignToUser(t, user)); } catch { /* ignore */ }
-
-            // Si el ticket está 'Abierto' y el usuario actual es uno de los asignados,
-            // cambiar automáticamente a 'En Proceso' usando una transacción para evitar races
-            // y reutilizar el flujo de notificación existente.
-            try {
-              const amIAssigned = matchesAssignToUser(t, user);
-              if (amIAssigned && String(t.estado) === 'Abierto') {
-                const dbTicketId = foundKey;
-                const ticketRef = dbRef(dbInstance, `tickets/${dbTicketId}`);
-                // Ejecutar transacción atómica: solo actualizar si sigue 'Abierto'
-                const txResult = await runTransaction(ticketRef, (current) => {
-                  if (!current) return current;
-                  if (String(current.estado) !== 'Abierto') return; // abortar, ya cambió
-                  // establecer estado a En Proceso; conservar demás campos
-                  current.estado = 'En Proceso';
-                  // si no existe lastSlaStartAt, iniciar ahora (opcional)
-                  if (!current.lastSlaStartAt) current.lastSlaStartAt = Date.now();
-                  return current;
-                });
-                if (txResult && txResult.committed && txResult.snapshot && txResult.snapshot.exists()) {
-                  // actualizar estado localmente para reflejar cambio inmediato en UI
-                  try { setForm(f => ({ ...f, estado: 'En Proceso' })); } catch { /* ignore */ }
-                  setOriginalEstado(t.estado || 'Abierto');
-                  setSnackbar({ open: true, message: 'Ticket marcado como En Proceso', severity: 'info' });
-
-                  // Construir y enviar la misma notificación que se usa para cambios de estado
-                  try {
-                    const latestTicket = txResult.snapshot.val();
-                    const baseUrl = window.location.origin;
-                    const depObj = departamentos.find(d => d.id === latestTicket.departamento);
-                    const departamentoNombre = depObj ? depObj.nombre : latestTicket.departamento;
-                    const ticketForHtml = { ...latestTicket, ticketId: latestTicket.codigo || dbTicketId, departamentoNombre };
-                    // Calcular SLA y tiempos si aplica
-                    try {
-                      const slaInfo = calculateSlaForTicket(ticketForHtml);
-                      if (slaInfo && slaInfo.slaHours != null) {
-                        ticketForHtml.slaHours = slaInfo.slaHours;
-                        ticketForHtml.slaHoursOriginal = slaInfo.slaHours;
-                        ticketForHtml.slaHoursExplicit = slaInfo.slaHours;
-                      }
-                      const tiempo = computeResolutionHoursForTicket(ticketForHtml);
-                      if (tiempo != null) ticketForHtml.tiempoLaboral = tiempo;
-                    } catch { /* ignore */ }
-
-                    const resumenCambios = `Cambio automático a En Proceso al abrir ticket por asignado`;
-                    const html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
-                    // destinatarios: asignados -> emails; incluir creador
-                    let toList = [];
-                    if (latestTicket.asignadoEmails && latestTicket.asignadoEmails.length) {
-                      toList = latestTicket.asignadoEmails.slice();
-                    } else if (latestTicket.asignados && latestTicket.asignados.length) {
-                      const resolved = latestTicket.asignados.map(idu => { const u = usuarios.find(x => x.id === idu); return u ? u.email : null; }).filter(Boolean);
-                      toList = resolved;
-                    } else if (latestTicket.asignadoEmail) {
-                      toList = [latestTicket.asignadoEmail];
-                    }
-                    const creatorEmail = latestTicket.usuarioEmail ? String(latestTicket.usuarioEmail).toLowerCase() : null;
-                    const normalized = (toList || []).map(e => String(e || '').toLowerCase()).filter(Boolean);
-                    if (creatorEmail) normalized.push(creatorEmail);
-                    const unique = Array.from(new Set(normalized));
-                    const ticketForHtmlWithTo = { ...ticketForHtml, to: unique };
-                    const payload = buildSendMailPayload({
-                      ticket: ticketForHtmlWithTo,
-                      departamento: latestTicket.departamento,
-                      departamentoNombre,
-                      subject: `[Ticket En Proceso] ${latestTicket.tipo || ''} #${latestTicket.codigo || dbTicketId}`,
-                      actionMsg: resumenCambios,
-                      htmlOverride: html,
-                      cc: []
-                    });
-                    if (!ensurePayloadHasRecipients(payload)) {
-                      try { setFailedNotification({ payload, type: 'autostart', dbTicketId, message: 'Notificación automática En Proceso' }); } catch (err) { console.warn('No se pudo guardar failedNotification', err); }
-                    } else {
-                      await sendTicketMail(payload);
-                    }
-                  } catch (e) {
-                    console.error('Error enviando notificación automática En Proceso', e);
-                  }
-                }
-              }
-            } catch (e) {
-              console.warn('No se pudo ejecutar transición automática a En Proceso', e);
-            }
             // load comments if any (object -> array sorted asc)
             if (t.comments) {
               try {
@@ -377,7 +305,7 @@ export default function TicketPage() {
       }
     };
     load();
-  }, [id, isNew, ctxDb, recinto, dbLoading, user, userData, tiposFromCtx, subcatsFromCtx, calculateSlaForTicket, departamentos, usuarios]); // incluye user para recalcular wasOriginallyAssigned si cambia sesión
+  }, [id, isNew, ctxDb, recinto, dbLoading, user, userData, tiposFromCtx, subcatsFromCtx]); // incluye user para recalcular wasOriginallyAssigned si cambia sesión
 
   // cargar motivos de pausa cuando cambia el departamento seleccionado (o cuando carga contexto DB)
   useEffect(() => {
@@ -619,6 +547,28 @@ export default function TicketPage() {
       setError('Error al reanudar el ticket');
     } finally {
       setPauseLoading(false);
+    }
+  };
+
+  // Handler para iniciar ticket (marcar 'En Proceso') usando servicio transaccional
+  const handleInitiate = async () => {
+    if (isNew) return;
+    if (!canInitiate) { setError('No tienes permisos para iniciar este ticket'); return; }
+    setSaving(true);
+    try {
+      const dbTicketId = ticketKey || id;
+      const res = await markTicketAsInProcess({ recinto: recinto || (typeof localStorage !== 'undefined' && localStorage.getItem('selectedRecinto')) || 'GRUPO_HEROICA', ticketId: dbTicketId, actorUser: { uid: user?.uid, email: user?.email } });
+      if (res && res.changed) {
+        setForm(f => ({ ...f, estado: 'En Proceso' }));
+        setSnackbar({ open: true, message: 'Ticket marcado como En Proceso', severity: 'success' });
+      } else {
+        setSnackbar({ open: true, message: 'El ticket ya se encuentra en proceso o no pudo marcarse', severity: 'info' });
+      }
+    } catch (e) {
+      console.error('Error iniciando ticket', e);
+      setError('Error iniciando el ticket');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1482,6 +1432,14 @@ export default function TicketPage() {
             <MenuItem value="En Proceso">En Proceso</MenuItem>
             <MenuItem value="Cerrado">Cerrado</MenuItem>
           </TextField>
+          {/* Botón explícito para iniciar ticket (transaccional) */}
+          {(!isNew && form.estado === 'Abierto' && canInitiate) && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Button variant="contained" color="primary" onClick={handleInitiate} disabled={saving} sx={{ textTransform: 'none', fontWeight: 700 }}>
+                Iniciar
+              </Button>
+            </Box>
+          )}
           <TextField label="Usuario" value={form.usuario} InputProps={{ readOnly: true }} />
   {/* Comentario de resolución eliminado: usar la sección "Conversación" para discutir/resolver el ticket */}
           {/* Pause controls moved below the conversation */}
