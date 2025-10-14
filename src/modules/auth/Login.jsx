@@ -44,17 +44,12 @@ export default function Login() {
   const [selectedRecinto, setSelectedRecinto] = useState(() => {
     try {
       const stored = localStorage.getItem('selectedRecinto');
-      console.log('Valor guardado en localStorage:', stored);
-      console.log('RECINTOS disponibles:', RECINTOS.map(r => r.key));
       // Verificar que el valor guardado sea uno de los recintos válidos
       if (stored && RECINTOS.some(r => r.key === stored)) {
-        console.log('Usando valor guardado:', stored);
         return stored;
       }
-      console.log('Usando valor por defecto: CORPORATIVO');
       return 'CORPORATIVO';
-    } catch (e) {
-      console.log('Error al leer localStorage, usando CORPORATIVO:', e);
+    } catch {
       return 'CORPORATIVO';
     }
   });
@@ -63,18 +58,17 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Debug: Mostrar valor actual del selectedRecinto
-  console.log('Valor actual de selectedRecinto:', selectedRecinto);
 
   // Guardar en localStorage cuando cambie el valor
   useEffect(() => {
     try {
       localStorage.setItem('selectedRecinto', selectedRecinto);
-      console.log('Guardado en localStorage:', selectedRecinto);
-    } catch (e) {
-      console.log('Error al guardar en localStorage:', e);
+    } catch {
+      // Silenciar error
     }
   }, [selectedRecinto]);
+  // Estado para mostrar/ocultar contraseña
+  const [showPassword, setShowPassword] = useState(false);
 
   const isAdminEmail = (email) => {
     if (!email) return false;
@@ -411,7 +405,34 @@ export default function Login() {
 
         <form onSubmit={handleLogin}>
           <TextField fullWidth margin="normal" label="Correo" type="email" value={email} onChange={e => setEmail(e.target.value)} InputProps={{ startAdornment: (<InputAdornment position="start"><Email sx={{ mr: 1 }} /></InputAdornment>) }} required />
-          <TextField fullWidth margin="normal" label="Contraseña" type="password" value={password} onChange={e => setPassword(e.target.value)} InputProps={{ startAdornment: (<InputAdornment position="start"><Lock sx={{ mr: 1 }} /></InputAdornment>) }} required />
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Contraseña"
+            type={showPassword ? 'text' : 'password'}
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Lock sx={{ mr: 1 }} />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <Button
+                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    tabIndex={-1}
+                    sx={{ minWidth: 0, p: 0, color: 'inherit' }}
+                  >
+                    {showPassword ? '🙈' : '👁️'}
+                  </Button>
+                </InputAdornment>
+              )
+            }}
+            required
+          />
           <Button fullWidth variant="contained" color="primary" sx={{ mt: 2 }} type="submit" disabled={loading}>Ingresar</Button>
         </form>
 

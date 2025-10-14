@@ -90,6 +90,7 @@ export default function TicketPage() {
   const [deleting, setDeleting] = useState(false);
   // Flag para recordar si el usuario estaba originalmente asignado al cargar el ticket
   const [wasOriginallyAssigned, setWasOriginallyAssigned] = useState(false);
+  const [autoInitiatedForKey, setAutoInitiatedForKey] = useState(null);
   // Estados para configuraciones SLA
   const [slaConfigs, setSlaConfigs] = useState({});
   const [slaSubcats, setSlaSubcats] = useState({});
@@ -306,6 +307,52 @@ export default function TicketPage() {
     };
     load();
   }, [id, isNew, ctxDb, recinto, dbLoading, user, userData, tiposFromCtx, subcatsFromCtx]); // incluye user para recalcular wasOriginallyAssigned si cambia sesión
+
+
+  // Handler para iniciar ticket (marcar 'En Proceso') usando servicio transaccional
+  const handleInitiate = React.useCallback(async () => {
+    if (isNew) return;
+    if (!canInitiate) { setError('No tienes permisos para iniciar este ticket'); return; }
+    setSaving(true);
+    try {
+      const dbTicketId = ticketKey || id;
+      const res = await markTicketAsInProcess({ recinto: recinto || (typeof localStorage !== 'undefined' && localStorage.getItem('selectedRecinto')) || 'GRUPO_HEROICA', ticketId: dbTicketId, actorUser: { uid: user?.uid, email: user?.email } });
+      if (res && res.changed) {
+        setForm(f => ({ ...f, estado: 'En Proceso' }));
+        setSnackbar({ open: true, message: 'Ticket marcado como En Proceso', severity: 'success' });
+      } else {
+        setSnackbar({ open: true, message: 'El ticket ya se encuentra en proceso o no pudo marcarse', severity: 'info' });
+      }
+    } catch (e) {
+      console.error('Error iniciando ticket', e);
+      setError('Error iniciando el ticket');
+    } finally {
+      setSaving(false);
+    }
+  }, [isNew, canInitiate, ticketKey, id, recinto, user]);
+
+  // Auto-iniciar ticket la primera vez que se abre si es 'Abierto' y el usuario puede iniciarlo
+  useEffect(() => {
+    try {
+      if (isNew) return;
+      if (!ticketKey) return;
+      if (!form) return;
+      if (form.estado !== 'Abierto') return;
+      if (!canInitiate) return;
+      if (autoInitiatedForKey === ticketKey) return; // ya intentado
+      // Marcar como iniciado (no bloquear render): usamos handler existente
+      (async () => {
+        try {
+          await handleInitiate();
+          setAutoInitiatedForKey(ticketKey);
+        } catch {
+          // log y no romper flujo
+          console.warn('Auto-init failed');
+        }
+      })();
+  } catch { /* ignore */ }
+  }, [ticketKey, form, canInitiate, isNew, autoInitiatedForKey, handleInitiate]);
+
 
   // cargar motivos de pausa cuando cambia el departamento seleccionado (o cuando carga contexto DB)
   useEffect(() => {
@@ -550,28 +597,7 @@ export default function TicketPage() {
     }
   };
 
-  // Handler para iniciar ticket (marcar 'En Proceso') usando servicio transaccional
-  const handleInitiate = async () => {
-    if (isNew) return;
-    if (!canInitiate) { setError('No tienes permisos para iniciar este ticket'); return; }
-    setSaving(true);
-    try {
-      const dbTicketId = ticketKey || id;
-      const res = await markTicketAsInProcess({ recinto: recinto || (typeof localStorage !== 'undefined' && localStorage.getItem('selectedRecinto')) || 'GRUPO_HEROICA', ticketId: dbTicketId, actorUser: { uid: user?.uid, email: user?.email } });
-      if (res && res.changed) {
-        setForm(f => ({ ...f, estado: 'En Proceso' }));
-        setSnackbar({ open: true, message: 'Ticket marcado como En Proceso', severity: 'success' });
-      } else {
-        setSnackbar({ open: true, message: 'El ticket ya se encuentra en proceso o no pudo marcarse', severity: 'info' });
-      }
-    } catch (e) {
-      console.error('Error iniciando ticket', e);
-      setError('Error iniciando el ticket');
-    } finally {
-      setSaving(false);
-    }
-  };
-
+  
   // Reintentar envío de notificación fallida
   const resendNotification = async () => {
     setNotifRetryLoading(true);
