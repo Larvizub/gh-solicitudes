@@ -96,6 +96,20 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
               ${asignadoA ? row('Asignado a', asignadoA) : ''}
             </table>
             <div style="border:1px solid ${divider};background:${bg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;">${sanitize(descripcion)}</div>
+
+            ${/* Renderizar comentario reciente si existe en ticket.latestComment */''}
+            ${ticket && ticket.latestComment ? (() => {
+              try {
+                const c = ticket.latestComment || {};
+                const author = c.authorName || c.author || c.authorEmail || 'Usuario';
+                const commentText = c.text || c.comment || c.body || '';
+                return `
+                <div style="margin-top:12px;font-size:13px;color:${textMuted};font-weight:600;">Nuevo comentario por ${sanitize(author)}</div>
+                <div style="border:1px solid ${divider};background:${bg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;margin-top:8px;">${sanitize(commentText)}</div>
+                `;
+              } catch { return ''; }
+            })() : ''}
+
             ${extraMessage ? `<div style="margin:16px 0 0;font-size:12px;color:${textMuted};">${sanitize(extraMessage)}</div>`:''}
             <p style="margin:18px 0 0;font-size:12px;color:${textMuted};">Creado por: ${sanitize(usuario||usuarioEmail||'Usuario')}</p>
             <p style="margin:22px 0 4px;"><a href="${baseUrl}/tickets/${encodeURIComponent(ticketId)}" style="background:${primary};color:#fff;text-decoration:none;font-size:13px;padding:10px 20px;border-radius:6px;font-weight:600;display:inline-block;">Ver Ticket</a></p>
