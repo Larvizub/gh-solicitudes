@@ -101,19 +101,21 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
             ${(() => {
               // Si el ticket está pausado, usar colores distintos para el cuadro de mensaje
               const isPaused = String(estado || '').toLowerCase() === 'pausado';
-              const messageBg = isPaused ? pausedMessageBg : bg;
-              const messageBorder = isPaused ? pausedMessageBorder : divider;
+              // (nota: solo el bloque de comentario cambia cuando está pausado)
               return `
-              <div style="border:1px solid ${messageBorder};background:${messageBg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;">${sanitize(descripcion)}</div>
+              <div style="border:1px solid ${divider};background:${bg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;">${sanitize(descripcion)}</div>
 
               ${ticket && ticket.latestComment ? (() => {
                 try {
                   const c = ticket.latestComment || {};
                   const author = c.authorName || c.author || c.authorEmail || 'Usuario';
                   const commentText = c.text || c.comment || c.body || '';
+                  // El bloque de comentario usa el estilo pausado cuando corresponde
+                  const commentBorder = isPaused ? pausedMessageBorder : divider;
+                  const commentBg = isPaused ? pausedMessageBg : bg;
                   return `
                   <div style="margin-top:12px;font-size:13px;color:${textMuted};font-weight:600;">Nuevo comentario por ${sanitize(author)}</div>
-                  <div style="border:1px solid ${messageBorder};background:${messageBg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;margin-top:8px;">${sanitize(commentText)}</div>
+                  <div style="border:1px solid ${commentBorder};background:${commentBg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;margin-top:8px;">${sanitize(commentText)}</div>
                   `;
                 } catch { return ''; }
               })() : ''}
