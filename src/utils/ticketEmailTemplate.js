@@ -31,6 +31,9 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
   const divider = branding.divider || '#e3e7eb';
   const textMain = branding.textMain || '#1f2933';
   const textMuted = branding.textMuted || '#5d6b76';
+  // color para mensajes cuando el ticket está pausado
+  const pausedMessageBg = branding.pausedMessageBg || '#fff3e0';
+  const pausedMessageBorder = branding.pausedMessageBorder || '#ffd7a8';
   const logo = branding.logoUrl || 'https://costaricacc.com/cccr/Logoheroica.png';
   const company = branding.company || 'GH Solicitudes';
   const footerNote = branding.footerNote || 'Mensaje automático generado por GH Solicitudes';
@@ -95,20 +98,27 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
               ${row('Estado', estado, stateColor)}
               ${asignadoA ? row('Asignado a', asignadoA) : ''}
             </table>
-            <div style="border:1px solid ${divider};background:${bg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;">${sanitize(descripcion)}</div>
+            ${(() => {
+              // Si el ticket está pausado, usar colores distintos para el cuadro de mensaje
+              const isPaused = String(estado || '').toLowerCase() === 'pausado';
+              const messageBg = isPaused ? pausedMessageBg : bg;
+              const messageBorder = isPaused ? pausedMessageBorder : divider;
+              return `
+              <div style="border:1px solid ${messageBorder};background:${messageBg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;">${sanitize(descripcion)}</div>
 
-            ${/* Renderizar comentario reciente si existe en ticket.latestComment */''}
-            ${ticket && ticket.latestComment ? (() => {
-              try {
-                const c = ticket.latestComment || {};
-                const author = c.authorName || c.author || c.authorEmail || 'Usuario';
-                const commentText = c.text || c.comment || c.body || '';
-                return `
-                <div style="margin-top:12px;font-size:13px;color:${textMuted};font-weight:600;">Nuevo comentario por ${sanitize(author)}</div>
-                <div style="border:1px solid ${divider};background:${bg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;margin-top:8px;">${sanitize(commentText)}</div>
-                `;
-              } catch { return ''; }
-            })() : ''}
+              ${ticket && ticket.latestComment ? (() => {
+                try {
+                  const c = ticket.latestComment || {};
+                  const author = c.authorName || c.author || c.authorEmail || 'Usuario';
+                  const commentText = c.text || c.comment || c.body || '';
+                  return `
+                  <div style="margin-top:12px;font-size:13px;color:${textMuted};font-weight:600;">Nuevo comentario por ${sanitize(author)}</div>
+                  <div style="border:1px solid ${messageBorder};background:${messageBg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;margin-top:8px;">${sanitize(commentText)}</div>
+                  `;
+                } catch { return ''; }
+              })() : ''}
+              `;
+            })()}
 
             ${extraMessage ? `<div style="margin:16px 0 0;font-size:12px;color:${textMuted};">${sanitize(extraMessage)}</div>`:''}
             <p style="margin:18px 0 0;font-size:12px;color:${textMuted};">Creado por: ${sanitize(usuario||usuarioEmail||'Usuario')}</p>
