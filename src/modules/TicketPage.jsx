@@ -16,7 +16,7 @@ import { useAuth } from '../context/useAuth';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import workingMsBetween from '../utils/businessHours';
 import { msToHoursMinutes } from '../utils/formatDuration';
-import { generateTicketEmailHTML, buildSendMailPayload } from '../utils/ticketEmailTemplate';
+import { generateTicketEmailHTML, buildSendMailPayload, generateTicketExtraBlock } from '../utils/ticketEmailTemplate';
 import { sendTicketMail } from '../services/mailService';
 import { markTicketAsInProcess } from '../services/ticketService';
 import { calculateSlaRemaining, getSlaHours, computeResolutionHoursForTicket } from '../utils/slaCalculator';
@@ -435,10 +435,7 @@ export default function TicketPage() {
         let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
         // adjuntar motivo y comentario
         try {
-          const pauseHtml = `\n<div style="margin-top:16px;padding:12px;border-left:4px solid #ff9800;background:#fff7e6">` +
-            `<strong>Motivo:</strong> ${escapeHtml(motivoNombre)}<br/>` +
-            `<strong>Comentario:</strong><p style="white-space:pre-wrap">${escapeHtml(pauseComment || '')}</p>` +
-            `</div>`;
+          const pauseHtml = generateTicketExtraBlock({ type: 'pause', motivo: motivoNombre, comentario: pauseComment || '', branding: {} });
           html = `${html}${pauseHtml}`;
         } catch { /* no crítico */ }
         // destinatarios: asignados -> emails; incluir creador
@@ -534,11 +531,7 @@ export default function TicketPage() {
         const resumenCambios = `Ticket reanudado (duración de pausa: ${durText})`;
         let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
         try {
-          const resumeHtml = `\n<div style="margin-top:16px;padding:12px;border-left:4px solid #4caf50;background:#f0fff4">` +
-            `<strong>Motivo:</strong> ${escapeHtml(motivoNombre)}<br/>` +
-            `<strong>Comentario de pausa:</strong><p style="white-space:pre-wrap">${escapeHtml((pauseObj && pauseObj.comment) || pauseComment || '')}</p>` +
-            `<strong>Duración de la pausa:</strong> ${escapeHtml(durText)}` +
-            `</div>`;
+          const resumeHtml = generateTicketExtraBlock({ type: 'resume', motivo: motivoNombre, comentario: (pauseObj && pauseObj.comment) || pauseComment || '', duracion: durText, branding: {} });
           html = `${html}${resumeHtml}`;
         } catch { /* no crítico */ }
 

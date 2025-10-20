@@ -178,3 +178,24 @@ export function buildSendMailPayload({ ticket, departamento, departamentoNombre,
     cc: cc || []
   };
 }
+
+/**
+ * Genera un bloque html extra para motivos/comentarios (pausa/reanudación)
+ * type: 'pause' | 'resume'
+ */
+export function generateTicketExtraBlock({ type = 'pause', motivo = '', comentario = '', duracion = '', branding = {} }) {
+  const pausedBg = branding.pausedMessageBg || '#fff7e6';
+  const pausedBorder = branding.pausedMessageBorder || '#ff9800';
+  // Forzar que la reanudación use el mismo diseño que la pausa para mantener coherencia visual.
+  // Si en el futuro se desea diferenciar, se puede usar branding.resumeMessageBg / resumeMessageBorder.
+  // Usar el estilo de pausa tanto para 'pause' como para 'resume' (coherencia solicitada)
+  const bg = pausedBg;
+  const border = pausedBorder;
+  const sanitize = (s='') => String(s).replace(/</g,'&lt;');
+  const motivoHtml = motivo ? `<strong>Motivo:</strong> ${sanitize(motivo)}<br/>` : '';
+  const durHtml = duracion ? `<strong>Duración de la pausa:</strong> ${sanitize(duracion)}<br/>` : '';
+  const comentarioHtml = comentario ? `<strong>Comentario${type==='resume'?' de pausa':''}:</strong><p style="white-space:pre-wrap">${sanitize(comentario)}</p>` : '';
+  return `\n<div style="margin-top:16px;padding:12px;border-left:4px solid ${border};background:${bg}">` +
+    `${motivoHtml}${comentarioHtml}${durHtml}` +
+    `</div>`;
+}
