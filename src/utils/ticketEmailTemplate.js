@@ -76,7 +76,8 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
 
   const sanitize = (str='') => String(str).replace(/</g,'&lt;');
 
-  return `<!DOCTYPE html><html lang='es'><head><meta charset='utf-8'/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  return `<!DOCTYPE html><!-- gh-solicitudes-email-v2 -->\n<html lang='es'><head><meta charset='utf-8'/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="x-gh-template-version" content="v2" />
   <title>Actualización de ticket</title>
   <style>@media (max-width:640px){.container{width:100%!important;border-radius:0!important;} .pad{padding:20px!important;}}</style>
   </head>

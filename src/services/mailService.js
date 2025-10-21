@@ -25,10 +25,12 @@ export async function sendTicketMail(payload) {
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers['x-api-key'] = apiKey;
 
+  // Asegurar campo html: algunos callers usan htmlOverride
+  const bodyToSend = Object.assign({}, payload, { templateVersion: 'v2', html: payload.html || payload.htmlOverride || payload.html || '' });
   const resp = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(payload)
+    body: JSON.stringify(bodyToSend)
   });
   if (!resp.ok) {
     const text = await resp.text();
