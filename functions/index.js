@@ -293,7 +293,14 @@ export const sendMail = functions.https.onRequest(async (req, res) => {
     if (!validateApiKey(req)) return res.status(401).json({ error: 'API Key inválida' });
     if (req.headers['content-type']?.indexOf('application/json') === -1) return res.status(415).json({ error: 'Content-Type application/json requerido' });
 
-    const body = req.body || {};
+  const body = req.body || {};
+    // Debug: log template version if present and a short preview of html (protected checks)
+    if (body && (typeof body.templateVersion === 'string' || body.templateVersion)) {
+      console.log('sendMail payload templateVersion:', body.templateVersion || '<none>');
+    }
+    if (body && typeof body.html === 'string' && body.html.length) {
+      console.log('sendMail html preview:', body.html.slice(0,200));
+    }
     const required = ['ticketId','departamento','tipo','estado'];
     const missing = required.filter(k => !body[k]);
     if (missing.length) return res.status(400).json({ error: 'Faltan campos', campos: missing });
