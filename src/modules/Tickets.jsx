@@ -168,6 +168,8 @@ export default function Tickets() {
   const [tableFilter, setTableFilter] = useState('Todos'); // 'Todos'|'Abierto'|'En Proceso'|'Cerrado'
   const [searchQuery, setSearchQuery] = useState(''); // texto de búsqueda para filtrar tickets
   const closedCount = ticketsTablaSorted.filter(t => t.estado === 'Cerrado').length;
+  // Estado para el selector de vista (Panel o Tabla)
+  const [viewMode, setViewMode] = useState('panel'); // 'panel' | 'tabla'
 
   // helper para comprobar coincidencia de búsqueda (case-insensitive)
   const matchesSearch = (ticket, q) => {
@@ -725,6 +727,29 @@ export default function Tickets() {
           {isAdmin && <Tab label={<Badge color="primary" badgeContent={allTickets.length}>Todos</Badge>} value="all" />}
         </Tabs>
       </Paper>
+      {/* Selector de modo de vista: Panel o Tabla */}
+      <Paper sx={{ mb: 2, p: 1 }} elevation={1}>
+        <Tabs
+          value={viewMode}
+          onChange={(e, val) => setViewMode(val)}
+          variant="fullWidth"
+          sx={(theme) => ({
+            '& .MuiTabs-indicator': {
+              backgroundColor: theme.palette.mode === 'dark' ? theme.palette.warning.light : undefined,
+            },
+            '& .MuiTab-root.Mui-selected': {
+              color: theme.palette.mode === 'dark' ? theme.palette.warning.light : undefined,
+            },
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 700,
+            }
+          })}
+        >
+          <Tab label="Vista de Panel" value="panel" />
+          <Tab label="Vista de Tabla" value="tabla" />
+        </Tabs>
+      </Paper>
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
@@ -745,6 +770,8 @@ export default function Tickets() {
           </Box>
         ) : (
           <>
+          {/* Vista de Panel (Kanban) */}
+          {viewMode === 'panel' && (
           <Box
             sx={{
               display: 'flex',
@@ -812,6 +839,61 @@ export default function Tickets() {
                             {ticket.subcategoria}
                           </Box>
                         )}
+                        {/* SLA Label */}
+                        {(() => {
+                          const slaInfo = calculateSlaForTicket(ticket);
+                          if (!slaInfo) return null;
+                          
+                          const { remainingHours, isExpired, overdueHours } = slaInfo;
+                          
+                          if (isExpired) {
+                            const totalHours = Math.round(((overdueHours !== undefined ? overdueHours : Math.abs(remainingHours))) * 10) / 10;
+                            return (
+                              <Box
+                                sx={{
+                                  bgcolor: 'error.main',
+                                  color: 'error.contrastText',
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  px: 1.2,
+                                  py: 0.5,
+                                  borderRadius: 2,
+                                  maxWidth: '100%',
+                                  lineHeight: 1.2,
+                                  overflow: 'hidden',
+                                  overflowWrap: 'anywhere',
+                                  boxShadow: 1,
+                                }}
+                              >
+                                ⚠️ Vencido: {totalHours}h
+                              </Box>
+                            );
+                          } else {
+                            const safeRemaining = remainingHours < 0 ? 0 : remainingHours;
+                            const totalHours = Math.round(safeRemaining * 10) / 10;
+                            const isUrgent = safeRemaining <= 12;
+                            return (
+                              <Box
+                                sx={{
+                                  bgcolor: isUrgent ? 'warning.main' : 'success.light',
+                                  color: isUrgent ? 'warning.contrastText' : 'success.contrastText',
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  px: 1.2,
+                                  py: 0.5,
+                                  borderRadius: 2,
+                                  maxWidth: '100%',
+                                  lineHeight: 1.2,
+                                  overflow: 'hidden',
+                                  overflowWrap: 'anywhere',
+                                  boxShadow: 1,
+                                }}
+                              >
+                                🕐 SLA: {totalHours}h
+                              </Box>
+                            );
+                          }
+                        })()}
                         <Typography
                           variant="subtitle2"
                           sx={{
@@ -854,7 +936,9 @@ export default function Tickets() {
             </Box>
           ))}
         </Box>
-        {/* Tabla de tickets justo debajo de las tarjetas */}
+          )}
+        {/* Vista de Tabla */}
+        {viewMode === 'tabla' && (
         <Paper elevation={1} sx={{ mt: 2, width: '100%', maxWidth: '100vw', p: { xs: 1.5, sm: 2 }, borderRadius: 4, boxShadow: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: 1, color: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : 'primary.main' }}>
@@ -1003,6 +1087,7 @@ export default function Tickets() {
             <Pagination count={pageCount} page={page} onChange={(e, val) => setPage(val)} color="primary" />
           </Box>
         </Paper>
+        )}
           </>
         )}
       </Box>
