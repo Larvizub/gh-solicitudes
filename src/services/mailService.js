@@ -27,6 +27,9 @@ export async function sendTicketMail(payload) {
 
   // Asegurar campo html: algunos callers usan htmlOverride
   const bodyToSend = Object.assign({}, payload, { templateVersion: 'v2', html: payload.html || payload.htmlOverride || payload.html || '' });
+  try {
+    console.debug && console.debug('sendTicketMail -> sending templateVersion:', bodyToSend.templateVersion, 'html preview:', (typeof bodyToSend.html === 'string' ? bodyToSend.html.slice(0,200) : '<no-html>'));
+  } catch { /* ignore */ }
   const resp = await fetch(url, {
     method: 'POST',
     headers,

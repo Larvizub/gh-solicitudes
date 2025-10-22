@@ -126,7 +126,7 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
             ${extraMessage ? `<div style="margin:16px 0 0;font-size:12px;color:${textMuted};">${sanitize(extraMessage)}</div>`:''}
             <p style="margin:18px 0 0;font-size:12px;color:${textMuted};">Creado por: ${sanitize(usuario||usuarioEmail||'Usuario')}</p>
             <p style="margin:22px 0 4px;"><a href="${baseUrl}/tickets/${encodeURIComponent(ticketId)}" style="background:${primary};color:#fff;text-decoration:none;font-size:13px;padding:10px 20px;border-radius:6px;font-weight:600;display:inline-block;">Ver Ticket</a></p>
-            <p style="margin:18px 0 0;font-size:10px;color:${textMuted};">${sanitize(footerNote)}</p>
+            <p style="margin:18px 0 0;font-size:10px;color:${textMuted};">${sanitize(footerNote)} <span style="font-size:10px;color:${textMuted};margin-left:8px;">(Plantilla v2)</span></p>
           </td></tr>
         </table>
       </td></tr>
