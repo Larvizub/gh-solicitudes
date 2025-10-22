@@ -128,11 +128,13 @@ export default function Tickets() {
   };
 
   // Construir lista plana de tickets para la tabla (debe ir después de definir tickets a renderizar)
-  const ticketsToRender = viewTab === 'assigned' ? assignedTickets
-    : viewTab === 'created' ? createdTickets
-    : viewTab === 'dept' ? deptTickets
-    : viewTab === 'deptCreated' ? deptCreatedTickets
-    : allTickets;
+  const ticketsToRender = React.useMemo(() => {
+    return viewTab === 'assigned' ? assignedTickets
+      : viewTab === 'created' ? createdTickets
+      : viewTab === 'dept' ? deptTickets
+      : viewTab === 'deptCreated' ? deptCreatedTickets
+      : allTickets;
+  }, [viewTab, assignedTickets, createdTickets, deptTickets, deptCreatedTickets, allTickets]);
 
   const [nowTick, setNowTick] = useState(Date.now());
   // Intervalo para refrescar SLA cada 60s
@@ -645,14 +647,16 @@ export default function Tickets() {
   };
 
   // Agrupar tickets por estado para vista Kanban
-  const estados = [
-  { key: 'Abierto', label: 'Abierto', color: 'warning.main' },
-  { key: 'En Proceso', label: 'En Proceso', color: 'info.main' },
-  ];
-  const ticketsPorEstado = estados.map(est => ({
-    ...est,
-    tickets: (ticketsToRender || []).filter(t => t.estado === est.key),
-  }));
+  const ticketsPorEstado = React.useMemo(() => {
+    const estados = [
+      { key: 'Abierto', label: 'Abierto', color: 'warning.main' },
+      { key: 'En Proceso', label: 'En Proceso', color: 'info.main' },
+    ];
+    return estados.map(est => ({
+      ...est,
+      tickets: (ticketsToRender || []).filter(t => t.estado === est.key),
+    }));
+  }, [ticketsToRender]);
 
   // Para mapear nombre de tipo a su ID y obtener subcategorías
   const tipoKey = form.departamento && form.tipo && tipos[form.departamento]
