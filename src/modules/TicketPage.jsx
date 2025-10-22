@@ -16,21 +16,13 @@ import { useAuth } from '../context/useAuth';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import workingMsBetween from '../utils/businessHours';
 import { msToHoursMinutes } from '../utils/formatDuration';
-import { generateTicketEmailHTML, buildSendMailPayload, generateTicketExtraBlock } from '../utils/ticketEmailTemplate';
+import { generateTicketEmailHTML, buildSendMailPayload } from '../utils/ticketEmailTemplate';
 import { sendTicketMail } from '../services/mailService';
 import { markTicketAsInProcess } from '../services/ticketService';
 import { calculateSlaRemaining, getSlaHours, computeResolutionHoursForTicket } from '../utils/slaCalculator';
 
 function padNum(n, len = 4) {
   return String(n).padStart(len, '0');
-}
-
-// escapar texto para incrustar en HTML
-function escapeHtml(str) {
-  if (!str && str !== '') return '';
-  return String(str).replace(/[&<>"']/g, function (s) {
-    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[s];
-  });
 }
 
 export default function TicketPage() {
@@ -432,12 +424,20 @@ export default function TicketPage() {
         
         const motivoNombre = (pauseReasons.find(r => r.id === (pauseReasonId || '')) || {}).nombre || pauseReasonId || 'Sin motivo';
         const resumenCambios = `Ticket puesto en pausa: ${motivoNombre}`;
-        let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
-        // adjuntar motivo y comentario
-        try {
-          const pauseHtml = generateTicketExtraBlock({ type: 'pause', motivo: motivoNombre, comentario: pauseComment || '', branding: {} });
-          html = `${html}${pauseHtml}`;
-        } catch { /* no crítico */ }
+        
+        // Generar HTML con información de pausa integrada
+        let html = generateTicketEmailHTML({ 
+          ticket: ticketForHtml, 
+          baseUrl, 
+          extraMessage: resumenCambios,
+          pauseInfo: {
+            type: 'pause',
+            motivo: motivoNombre,
+            comentario: pauseComment || '',
+            duracion: ''
+          }
+        });
+        
         // destinatarios: asignados -> emails; incluir creador
         let toList = [];
         if (ticketObj.asignadoEmails && ticketObj.asignadoEmails.length) {
@@ -529,11 +529,19 @@ export default function TicketPage() {
         const durMs = (pausaInicio ? (pausaFin - pausaInicio) : null);
         const durText = durMs ? msToHoursMinutes(durMs) : 'N/A';
         const resumenCambios = `Ticket reanudado (duración de pausa: ${durText})`;
-        let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
-        try {
-          const resumeHtml = generateTicketExtraBlock({ type: 'resume', motivo: motivoNombre, comentario: (pauseObj && pauseObj.comment) || pauseComment || '', duracion: durText, branding: {} });
-          html = `${html}${resumeHtml}`;
-        } catch { /* no crítico */ }
+        
+        // Generar HTML con información de reanudación integrada
+        let html = generateTicketEmailHTML({ 
+          ticket: ticketForHtml, 
+          baseUrl, 
+          extraMessage: resumenCambios,
+          pauseInfo: {
+            type: 'resume',
+            motivo: motivoNombre,
+            comentario: (pauseObj && pauseObj.comment) || pauseComment || '',
+            duracion: durText
+          }
+        });
 
         // destinatarios como en pausa
         let toList = [];
@@ -745,17 +753,26 @@ export default function TicketPage() {
         }
         
         const resumenCambios = `Nuevo comentario por ${commentData.authorName || commentData.authorEmail}`;
-        let html = generateTicketEmailHTML({ ticket: ticketForHtml, baseUrl, extraMessage: resumenCambios });
-        // adjuntar el texto del comentario en el body HTML (escapado)
-        try {
-          const commentHtml = `\n<div style="margin-top:16px;padding:12px;border-left:4px solid #1976d2;background:#f7f9ff">` +
-            `<strong>Comentario:</strong><p style="white-space:pre-wrap">${escapeHtml(commentData.text || '')}</p>` +
-            (commentData.attachmentUrl ? `<p><a href="${escapeHtml(commentData.attachmentUrl)}">Ver adjunto</a></p>` : '') +
-            `</div>`;
-          // insertar al final del body
-          html = `${html}${commentHtml}`;
-  } catch { /* no crítico */ }
-  const ticketLabel = ticketObj.codigo || dbTicketId;
+        
+        // Incluir el comentario en el objeto ticket para que la plantilla lo muestre automáticamente
+        const ticketForHtmlWithComment = {
+          ...ticketForHtml,
+          latestComment: {
+            authorName: commentData.authorName,
+            author: commentData.authorName,
+            authorEmail: commentData.authorEmail,
+            text: commentData.text,
+            comment: commentData.text,
+            body: commentData.text,
+            attachmentUrl: commentData.attachmentUrl,
+            attachmentName: commentData.attachmentName
+          }
+        };
+        
+        // Generar el HTML usando la plantilla con el comentario incluido
+        let html = generateTicketEmailHTML({ ticket: ticketForHtmlWithComment, baseUrl, extraMessage: resumenCambios });
+        
+        const ticketLabel = ticketObj.codigo || dbTicketId;
         const subject = `[Comentario] ${ticketObj.tipo || ''} #${ticketLabel}`;
         // destinatarios: asignados -> emails; si no hay, usar asignadoEmail; incluir al creador
         let toList = [];
@@ -775,7 +792,8 @@ export default function TicketPage() {
         const normalized = (toList || []).map(e => String(e || '').toLowerCase()).filter(Boolean);
         if (creatorEmail) normalized.push(creatorEmail);
         const unique = Array.from(new Set(normalized));
-        const ticketForHtmlWithTo = { ...ticketForHtml, to: unique, comment: commentData };
+        // Usar ticketForHtmlWithComment que ya incluye latestComment
+        const ticketForHtmlWithTo = { ...ticketForHtmlWithComment, to: unique, comment: commentData };
         const payload = buildSendMailPayload({
           ticket: ticketForHtmlWithTo,
           departamento: ticketObj.departamento,

@@ -8,9 +8,10 @@
  * @param {string} options.baseUrl - URL base de la app (ej: https://gh-solicitudes.web.app)
  * @param {Object} [options.branding] - Overrides de branding
  * @param {string} [options.extraMessage] - Texto adicional
+ * @param {Object} [options.pauseInfo] - Información de pausa/reanudación {type: 'pause'|'resume', motivo: '', comentario: '', duracion: ''}
  * @returns {string} HTML listo para enviar
  */
-export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraMessage }) {
+export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraMessage, pauseInfo }) {
   const {
     ticketId,
     departamento,
@@ -31,9 +32,12 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
   const divider = branding.divider || '#e3e7eb';
   const textMain = branding.textMain || '#1f2933';
   const textMuted = branding.textMuted || '#5d6b76';
-  // color para mensajes cuando el ticket está pausado
-  const pausedMessageBg = branding.pausedMessageBg || '#fff3e0';
-  const pausedMessageBorder = branding.pausedMessageBorder || '#ffd7a8';
+  // colores para mensajes cuando el ticket está pausado
+  const pausedMessageBg = branding.pausedMessageBg || '#fff7e6';
+  const pausedMessageBorder = branding.pausedMessageBorder || '#ff9800';
+  // colores para comentarios (derivados del verde corporativo)
+  const commentMessageBg = branding.commentMessageBg || '#e8f5e9';
+  const commentMessageBorder = branding.commentMessageBorder || '#4caf50';
   const logo = branding.logoUrl || 'https://costaricacc.com/cccr/Logoheroica.png';
   const company = branding.company || 'GH Solicitudes';
   const footerNote = branding.footerNote || 'Mensaje automático generado por GH Solicitudes';
@@ -106,22 +110,37 @@ export function generateTicketEmailHTML({ ticket, baseUrl, branding = {}, extraM
               return `
               <div style="border:1px solid ${divider};background:${bg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;">${sanitize(descripcion)}</div>
 
-              ${ticket && ticket.latestComment ? (() => {
+              ${ticket && ticket.latestComment && (ticket.latestComment.text || ticket.latestComment.comment || ticket.latestComment.body) ? (() => {
                 try {
                   const c = ticket.latestComment || {};
                   const author = c.authorName || c.author || c.authorEmail || 'Usuario';
                   const commentText = c.text || c.comment || c.body || '';
-                  // El bloque de comentario usa el estilo pausado cuando corresponde
-                  const commentBorder = isPaused ? pausedMessageBorder : divider;
-                  const commentBg = isPaused ? pausedMessageBg : bg;
+                  if (!commentText) return ''; // No mostrar si no hay texto
+                  // El bloque de comentario usa estilo con borde verde (o naranja si está pausado)
+                  const commentBorder = isPaused ? pausedMessageBorder : commentMessageBorder;
+                  const commentBg = isPaused ? pausedMessageBg : commentMessageBg;
+                  // Generar el comentario con el mismo estilo visual que el bloque de pausa
+                  const authorHtml = `<strong>Comentario por ${sanitize(author)}:</strong><br/>`;
+                  const commentBodyHtml = `<p style="white-space:pre-wrap;margin:4px 0 0;">${sanitize(commentText)}</p>`;
+                  const attachmentHtml = c.attachmentUrl ? `<p style="margin:8px 0 0;"><a href="${sanitize(c.attachmentUrl)}" style="color:${primary};text-decoration:underline;">📎 ${sanitize(c.attachmentName || 'Ver adjunto')}</a></p>` : '';
                   return `
-                  <div style="margin-top:12px;font-size:13px;color:${textMuted};font-weight:600;">Nuevo comentario por ${sanitize(author)}</div>
-                  <div style="border:1px solid ${commentBorder};background:${commentBg};padding:14px 16px;border-radius:6px;font-size:13px;line-height:1.5;white-space:pre-wrap;margin-top:8px;">${sanitize(commentText)}</div>
+                  <div style="margin-top:16px;padding:14px 16px;border-left:4px solid ${commentBorder};background:${commentBg};border-radius:6px;">${authorHtml}${commentBodyHtml}${attachmentHtml}</div>
                   `;
                 } catch { return ''; }
               })() : ''}
               `;
             })()}
+
+            ${pauseInfo ? (() => {
+              // Generar bloque de pausa/reanudación integrado en la plantilla
+              const pausedBg = branding.pausedMessageBg || '#fff7e6';
+              const pausedBorder = branding.pausedMessageBorder || '#ff9800';
+              const sanitizePause = (s='') => String(s).replace(/</g,'&lt;');
+              const motivoHtml = pauseInfo.motivo ? `<strong>Motivo:</strong> ${sanitizePause(pauseInfo.motivo)}<br/>` : '';
+              const durHtml = pauseInfo.duracion ? `<strong>Duración de la pausa:</strong> ${sanitizePause(pauseInfo.duracion)}<br/>` : '';
+              const comentarioHtml = pauseInfo.comentario ? `<strong>Comentario${pauseInfo.type==='resume'?' de pausa':''}:</strong><p style="white-space:pre-wrap;margin:4px 0 0;">${sanitizePause(pauseInfo.comentario)}</p>` : '';
+              return `<div style="margin-top:16px;padding:14px 16px;border-left:4px solid ${pausedBorder};background:${pausedBg};border-radius:6px;">${motivoHtml}${comentarioHtml}${durHtml}</div>`;
+            })() : ''}
 
             ${extraMessage ? `<div style="margin:16px 0 0;font-size:12px;color:${textMuted};">${sanitize(extraMessage)}</div>`:''}
             <p style="margin:18px 0 0;font-size:12px;color:${textMuted};">Creado por: ${sanitize(usuario||usuarioEmail||'Usuario')}</p>
