@@ -127,6 +127,60 @@ export default function Tickets() {
     return calculateSlaRemaining(ticket, slaConfigs, slaSubcats, tipos, subcats);
   };
 
+  // Helper para obtener el nombre del usuario asignado
+  const getAssignedUserName = (ticket) => {
+    if (!ticket) return '-';
+
+    // Si hay asignadoNombres (nuevo formato), usar eso
+    if (ticket.asignadoNombres && Array.isArray(ticket.asignadoNombres) && ticket.asignadoNombres.length > 0) {
+      return ticket.asignadoNombres.join(', ');
+    }
+
+    // Si hay asignados como array de objetos
+    if (Array.isArray(ticket.asignados) && ticket.asignados.length > 0) {
+      const names = ticket.asignados.map(a => {
+        if (typeof a === 'object' && a.nombre) {
+          return `${a.nombre} ${a.apellido || ''}`.trim();
+        }
+        return null;
+      }).filter(Boolean);
+      if (names.length > 0) return names.join(', ');
+    }
+
+    // Buscar en la lista de usuarios por ID o email
+    if (Array.isArray(ticket.asignados) && ticket.asignados.length > 0) {
+      const names = ticket.asignados.map(a => {
+        if (typeof a === 'string') {
+          // Buscar por ID
+          const user = usuarios.find(u => u.id === a);
+          if (user) return `${user.nombre || ''} ${user.apellido || ''}`.trim();
+          // Buscar por email
+          const userByEmail = usuarios.find(u => u.email === a);
+          if (userByEmail) return `${userByEmail.nombre || ''} ${userByEmail.apellido || ''}`.trim();
+        }
+        return null;
+      }).filter(Boolean);
+      if (names.length > 0) return names.join(', ');
+    }
+
+    // Formatos antiguos
+    if (ticket.asignadoA) {
+      const user = usuarios.find(u => u.id === ticket.asignadoA);
+      if (user) return `${user.nombre || ''} ${user.apellido || ''}`.trim();
+    }
+
+    if (ticket.asignadoEmail) {
+      const user = usuarios.find(u => u.email === ticket.asignadoEmail);
+      if (user) return `${user.nombre || ''} ${user.apellido || ''}`.trim();
+    }
+
+    // Si no se encuentra, mostrar el email o ID como fallback
+    if (ticket.asignadoEmail) return ticket.asignadoEmail;
+    if (ticket.asignadoA) return ticket.asignadoA;
+
+    return '-';
+  };
+
   // Construir lista plana de tickets para la tabla (debe ir después de definir tickets a renderizar)
   const ticketsToRender = React.useMemo(() => {
     return viewTab === 'assigned' ? assignedTickets
@@ -1000,6 +1054,7 @@ export default function Tickets() {
                   <TableCell sx={{ fontWeight: 700 }}>Subcategoría</TableCell>
                     {/* Columna Descripción eliminada para evitar textos largos que rompan el layout */}
                   <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
+                  <TableCell sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>U. Asignado</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>Vencimiento</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Usuario</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Adjunto</TableCell>
@@ -1009,7 +1064,7 @@ export default function Tickets() {
               <TableBody>
   {filteredTickets.length === 0 ? (
       <TableRow>
-    <TableCell colSpan={10} align="center">Sin tickets registrados</TableCell>
+    <TableCell colSpan={11} align="center">Sin tickets registrados</TableCell>
       </TableRow>
     ) : (
                   pageTickets.map(ticket => (
@@ -1031,6 +1086,9 @@ export default function Tickets() {
                       {/* Celda de Descripción eliminada */}
                       <TableCell>
                         <Chip label={ticket.estado} color={ticket.estado === 'Abierto' ? 'warning' : ticket.estado === 'En Proceso' ? 'info' : 'success'} size="small" />
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                        {getAssignedUserName(ticket)}
                       </TableCell>
                       <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                         {(() => {
