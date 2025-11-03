@@ -1056,7 +1056,7 @@ export default function Tickets() {
                   <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>U. Asignado</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', md: 'table-cell' } }}>Vencimiento</TableCell>
-                  <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Usuario</TableCell>
+                  <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Creado Por</TableCell>
                   <TableCell sx={{ fontWeight: 700, display: { xs: 'none', sm: 'table-cell' } }}>Adjunto</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>
                 </TableRow>
