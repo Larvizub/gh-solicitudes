@@ -1321,92 +1321,16 @@ export default function TicketPage() {
   {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
   {/* Alert de éxito removido; se usa Snackbar inferior */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
-          <TextField
-            select
-            label="Solicitud para"
-            value={form.departamento}
-            onChange={e => setForm(f => ({ ...f, departamento: e.target.value, tipo: '' }))}
-            disabled={saving || (!isNew && !isAdmin)}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                backgroundColor: theme => theme.palette.background.paper,
-                '&:hover': {
-                  backgroundColor: theme => theme.palette.action.hover,
-                },
-                '&.Mui-focused': {
-                  backgroundColor: theme => theme.palette.background.paper,
-                }
-              }
-            }}
-          >
-            <MenuItem value="" disabled>Selecciona un departamento</MenuItem>
-            {departamentos.map(d => <MenuItem key={d.id} value={d.id}>{d.nombre}</MenuItem>)}
-          </TextField>
-          <TextField
-            select
-            label="Categoría"
-            value={form.tipo}
-            onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
-            disabled={saving || (!isNew && !isAdmin)}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                backgroundColor: theme => theme.palette.background.paper,
-                '&:hover': {
-                  backgroundColor: theme => theme.palette.action.hover,
-                },
-                '&.Mui-focused': {
-                  backgroundColor: theme => theme.palette.background.paper,
-                }
-              }
-            }}
-          >
-            <MenuItem value="" disabled>Selecciona una categoría</MenuItem>
-            {form.departamento && tipos[form.departamento] && Object.entries(tipos[form.departamento]).map(([id, nombre]) => (
-              <MenuItem key={id} value={nombre}>{nombre}</MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            label="Subcategoría"
-            value={form.subcategoria}
-            onChange={e => setForm({...form, subcategoria: e.target.value})}
-            disabled={saving || (!isNew && !isAdmin && !reassignMode)}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                backgroundColor: theme => theme.palette.background.paper,
-                '&:hover': {
-                  backgroundColor: theme => theme.palette.action.hover,
-                },
-                '&.Mui-focused': {
-                  backgroundColor: theme => theme.palette.background.paper,
-                }
-              }
-            }}
-          >
-            <MenuItem value="" disabled>Selecciona una subcategoría</MenuItem>
-            {form.departamento && tipos && subcats[form.departamento] && form.tipo && (() => {
-              const tipoKey = Object.entries(tipos[form.departamento] || {}).find(([, nombre]) => nombre === form.tipo)?.[0];
-              const opciones = tipoKey ? (subcats[form.departamento]?.[tipoKey] || {}) : {};
-              return Object.entries(opciones).map(([id, nombre]) => <MenuItem key={id} value={nombre}>{nombre}</MenuItem>);
-            })()}
-          </TextField>
-          <Autocomplete
-            multiple
-            options={(() => {
-              const depName = (departamentos.find(d => String(d.id) === String(form.departamento)) || {}).nombre;
-              return usuarios.filter(u => (u.departamento && (String(u.departamento) === String(form.departamento) || String(u.departamento) === String(depName))));
-            })()}
-            getOptionLabel={opt => `${opt.nombre || ''} ${opt.apellido || ''}`.trim() || opt.email}
-            value={usuarios.filter(u => (form.asignados || []).includes(u.id))}
-            onChange={(_, newVal) => setForm(f => ({ ...f, asignados: newVal.map(u => u.id) }))}
-            disabled={saving || (!isNew && !isAdmin && !reassignMode)}
-            renderInput={(params) => (
+          {/* Primera fila: Solicitud para + Categoría (responsive: column en xs, row en sm+ ) */}
+          <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+            <Box sx={{ flex: 1 }}>
               <TextField
-                {...params}
-                label="Asignar solicitud a: (múltiple)"
+                select
+                label="Solicitud para"
+                value={form.departamento}
+                onChange={e => setForm(f => ({ ...f, departamento: e.target.value, tipo: '' }))}
+                disabled={saving || (!isNew && !isAdmin)}
+                fullWidth
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
@@ -1419,9 +1343,105 @@ export default function TicketPage() {
                     }
                   }
                 }}
+              >
+                <MenuItem value="" disabled>Selecciona un departamento</MenuItem>
+                {departamentos.map(d => <MenuItem key={d.id} value={d.id}>{d.nombre}</MenuItem>)}
+              </TextField>
+            </Box>
+            <Box sx={{ flex: 1 }}>
+              <TextField
+                select
+                label="Categoría"
+                value={form.tipo}
+                onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
+                disabled={saving || (!isNew && !isAdmin)}
+                fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    backgroundColor: theme => theme.palette.background.paper,
+                    '&:hover': {
+                      backgroundColor: theme => theme.palette.action.hover,
+                    },
+                    '&.Mui-focused': {
+                      backgroundColor: theme => theme.palette.background.paper,
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="" disabled>Selecciona una categoría</MenuItem>
+                {form.departamento && tipos[form.departamento] && Object.entries(tipos[form.departamento]).map(([id, nombre]) => (
+                  <MenuItem key={id} value={nombre}>{nombre}</MenuItem>
+                ))}
+              </TextField>
+            </Box>
+          </Box>
+
+          {/* Segunda fila: Subcategoría + Asignar solicitud (responsive) */}
+          <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+            <Box sx={{ flex: 1 }}>
+              <TextField
+                select
+                label="Subcategoría"
+                value={form.subcategoria}
+                onChange={e => setForm({...form, subcategoria: e.target.value})}
+                disabled={saving || (!isNew && !isAdmin && !reassignMode)}
+                fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    backgroundColor: theme => theme.palette.background.paper,
+                    '&:hover': {
+                      backgroundColor: theme => theme.palette.action.hover,
+                    },
+                    '&.Mui-focused': {
+                      backgroundColor: theme => theme.palette.background.paper,
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="" disabled>Selecciona una subcategoría</MenuItem>
+                {form.departamento && tipos && subcats[form.departamento] && form.tipo && (() => {
+                  const tipoKey = Object.entries(tipos[form.departamento] || {}).find(([, nombre]) => nombre === form.tipo)?.[0];
+                  const opciones = tipoKey ? (subcats[form.departamento]?.[tipoKey] || {}) : {};
+                  return Object.entries(opciones).map(([id, nombre]) => <MenuItem key={id} value={nombre}>{nombre}</MenuItem>);
+                })()}
+              </TextField>
+            </Box>
+            <Box sx={{ flex: 1 }}>
+              <Autocomplete
+                multiple
+                fullWidth
+                options={(() => {
+                  const depName = (departamentos.find(d => String(d.id) === String(form.departamento)) || {}).nombre;
+                  return usuarios.filter(u => (u.departamento && (String(u.departamento) === String(form.departamento) || String(u.departamento) === String(depName))));
+                })()}
+                getOptionLabel={opt => `${opt.nombre || ''} ${opt.apellido || ''}`.trim() || opt.email}
+                value={usuarios.filter(u => (form.asignados || []).includes(u.id))}
+                onChange={(_, newVal) => setForm(f => ({ ...f, asignados: newVal.map(u => u.id) }))}
+                disabled={saving || (!isNew && !isAdmin && !reassignMode)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Asignar solicitud a: (múltiple)"
+                    fullWidth
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        backgroundColor: theme => theme.palette.background.paper,
+                        '&:hover': {
+                          backgroundColor: theme => theme.palette.action.hover,
+                        },
+                        '&.Mui-focused': {
+                          backgroundColor: theme => theme.palette.background.paper,
+                        }
+                      }
+                    }}
+                  />
+                )}
               />
-            )}
-          />
+            </Box>
+          </Box>
           {!isNew && (isAdmin || matchesAssignToUser(form, user) || (reassignMode && wasOriginallyAssigned)) && form.estado !== 'Cerrado' && (
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -1 }}>
               <Tooltip title={reassignMode ? 'Cancelar reasignación' : 'Reasignar ticket (cambiar asignados / subcategoría)'} placement="left">
