@@ -13,12 +13,14 @@ const RECINTO_DB_URLS = {
 // Cache de apps por URL
 const apps = {};
 
-export function getDbForRecinto(recintoKey) {
+export async function getDbForRecinto(recintoKey) {
   const url = RECINTO_DB_URLS[recintoKey] || RECINTO_DB_URLS.GRUPO_HEROICA;
   if (apps[url]) return apps[url];
+
   // Inicializamos una app aislada con solo el databaseURL
   const config = { databaseURL: url };
   const name = `db-${recintoKey}`;
+
   try {
     const app = initializeApp(config, name);
     const db = getDatabase(app);
@@ -27,20 +29,17 @@ export function getDbForRecinto(recintoKey) {
   } catch (err) {
     // Si falla (por ejemplo, ya existe una app con ese nombre), intentar obtenerla
     try {
-  return import('firebase/app').then(module => {
-        const getApps = module.getApps;
-        const existing = getApps().find(a => a.name === name);
-        if (existing) {
-          const db = getDatabase(existing);
-          apps[url] = db;
-          return db;
-        }
-        // si no existe, re-throw el error original
-        throw err;
-      });
-    } catch {
-      // ignore
+      const { getApps } = await import('firebase/app');
+      const existing = getApps().find(a => a.name === name);
+      if (existing) {
+        const db = getDatabase(existing);
+        apps[url] = db;
+        return db;
+      }
+    } catch (importErr) {
+      console.warn('Error importing firebase/app:', importErr);
     }
+    // Si no se puede recuperar, re-throw el error original
     throw err;
   }
 }

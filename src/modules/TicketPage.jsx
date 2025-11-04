@@ -1290,7 +1290,17 @@ export default function TicketPage() {
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Paper sx={{ p: 2 }}>
+      <Paper
+        sx={{
+          p: 3,
+          borderRadius: 3,
+          boxShadow: theme => theme.shadows[2],
+          backgroundColor: theme => theme.palette.background.paper,
+          '&:hover': {
+            boxShadow: theme => theme.shadows[4],
+          }
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 900 }}>{isNew ? 'Nuevo Ticket' : `Ticket ${form.codigo || id}`}</Typography>
@@ -1310,18 +1320,72 @@ export default function TicketPage() {
         </Box>
   {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
   {/* Alert de éxito removido; se usa Snackbar inferior */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <TextField select label="Solicitud para" value={form.departamento} onChange={e => setForm(f => ({ ...f, departamento: e.target.value, tipo: '' }))} disabled={saving || (!isNew && !isAdmin)}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
+          <TextField
+            select
+            label="Solicitud para"
+            value={form.departamento}
+            onChange={e => setForm(f => ({ ...f, departamento: e.target.value, tipo: '' }))}
+            disabled={saving || (!isNew && !isAdmin)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                backgroundColor: theme => theme.palette.background.paper,
+                '&:hover': {
+                  backgroundColor: theme => theme.palette.action.hover,
+                },
+                '&.Mui-focused': {
+                  backgroundColor: theme => theme.palette.background.paper,
+                }
+              }
+            }}
+          >
             <MenuItem value="" disabled>Selecciona un departamento</MenuItem>
             {departamentos.map(d => <MenuItem key={d.id} value={d.id}>{d.nombre}</MenuItem>)}
           </TextField>
-          <TextField select label="Categoría" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))} disabled={saving || (!isNew && !isAdmin)}>
+          <TextField
+            select
+            label="Categoría"
+            value={form.tipo}
+            onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
+            disabled={saving || (!isNew && !isAdmin)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                backgroundColor: theme => theme.palette.background.paper,
+                '&:hover': {
+                  backgroundColor: theme => theme.palette.action.hover,
+                },
+                '&.Mui-focused': {
+                  backgroundColor: theme => theme.palette.background.paper,
+                }
+              }
+            }}
+          >
             <MenuItem value="" disabled>Selecciona una categoría</MenuItem>
             {form.departamento && tipos[form.departamento] && Object.entries(tipos[form.departamento]).map(([id, nombre]) => (
               <MenuItem key={id} value={nombre}>{nombre}</MenuItem>
             ))}
           </TextField>
-          <TextField select label="Subcategoría" value={form.subcategoria} onChange={e => setForm({...form, subcategoria: e.target.value})} disabled={saving || (!isNew && !isAdmin && !reassignMode)}>
+          <TextField
+            select
+            label="Subcategoría"
+            value={form.subcategoria}
+            onChange={e => setForm({...form, subcategoria: e.target.value})}
+            disabled={saving || (!isNew && !isAdmin && !reassignMode)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                backgroundColor: theme => theme.palette.background.paper,
+                '&:hover': {
+                  backgroundColor: theme => theme.palette.action.hover,
+                },
+                '&.Mui-focused': {
+                  backgroundColor: theme => theme.palette.background.paper,
+                }
+              }
+            }}
+          >
             <MenuItem value="" disabled>Selecciona una subcategoría</MenuItem>
             {form.departamento && tipos && subcats[form.departamento] && form.tipo && (() => {
               const tipoKey = Object.entries(tipos[form.departamento] || {}).find(([, nombre]) => nombre === form.tipo)?.[0];
@@ -1339,7 +1403,24 @@ export default function TicketPage() {
             value={usuarios.filter(u => (form.asignados || []).includes(u.id))}
             onChange={(_, newVal) => setForm(f => ({ ...f, asignados: newVal.map(u => u.id) }))}
             disabled={saving || (!isNew && !isAdmin && !reassignMode)}
-            renderInput={(params) => <TextField {...params} label="Asignar solicitud a: (múltiple)" />}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Asignar solicitud a: (múltiple)"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    backgroundColor: theme => theme.palette.background.paper,
+                    '&:hover': {
+                      backgroundColor: theme => theme.palette.action.hover,
+                    },
+                    '&.Mui-focused': {
+                      backgroundColor: theme => theme.palette.background.paper,
+                    }
+                  }
+                }}
+              />
+            )}
           />
           {!isNew && (isAdmin || matchesAssignToUser(form, user) || (reassignMode && wasOriginallyAssigned)) && form.estado !== 'Cerrado' && (
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -1 }}>
@@ -1360,14 +1441,42 @@ export default function TicketPage() {
               </Tooltip>
             </Box>
           )}
-          <TextField label="Descripción" multiline minRows={3} value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} disabled={saving || (!isNew && !isAdmin)} />
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+          <TextField
+            label="Descripción"
+            multiline
+            minRows={3}
+            value={form.descripcion}
+            onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
+            disabled={saving || (!isNew && !isAdmin)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                backgroundColor: theme => theme.palette.background.paper,
+                '&:hover': {
+                  backgroundColor: theme => theme.palette.action.hover,
+                },
+                '&.Mui-focused': {
+                  backgroundColor: theme => theme.palette.background.paper,
+                }
+              }
+            }}
+          />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
               <Button
                 variant="outlined"
                 component="label"
                 disabled={saving || (!isNew && !isAdmin)}
-                sx={{ textTransform: 'none' }}
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  px: 3,
+                  '&:hover': {
+                    backgroundColor: theme => theme.palette.primary.main,
+                    color: theme => theme.palette.primary.contrastText,
+                  }
+                }}
               >
                 {newAdjuntos.length ? `${newAdjuntos.length} archivo(s) seleccionados` : 'Seleccionar adjuntos'}
                 <input
@@ -1386,7 +1495,15 @@ export default function TicketPage() {
                   color="error"
                   disabled={saving}
                   onClick={() => setNewAdjuntos([])}
-                  sx={{ textTransform: 'none' }}
+                  sx={{
+                    textTransform: 'none',
+                    borderRadius: 2,
+                    fontWeight: 600,
+                    '&:hover': {
+                      backgroundColor: theme => theme.palette.error.main,
+                      color: theme => theme.palette.error.contrastText,
+                    }
+                  }}
                 >
                   Limpiar selección
                 </Button>
@@ -1461,10 +1578,28 @@ export default function TicketPage() {
               </Box>
             )}
           </Box>
-          <TextField select label="Estado" value={form.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value }))} disabled={
-            saving || isNew || (!isAdmin && !matchesAssignToUser(form, user) && !isCreator && !isSameDepartment) ||
-            (originalEstado === 'Cerrado' && !isAdmin)
-          }>
+          <TextField
+            select
+            label="Estado"
+            value={form.estado}
+            onChange={e => setForm(f => ({ ...f, estado: e.target.value }))}
+            disabled={
+              saving || isNew || (!isAdmin && !matchesAssignToUser(form, user) && !isCreator && !isSameDepartment) ||
+              (originalEstado === 'Cerrado' && !isAdmin)
+            }
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                backgroundColor: theme => theme.palette.background.paper,
+                '&:hover': {
+                  backgroundColor: theme => theme.palette.action.hover,
+                },
+                '&.Mui-focused': {
+                  backgroundColor: theme => theme.palette.background.paper,
+                }
+              }
+            }}
+          >
             <MenuItem value="Abierto">Abierto</MenuItem>
             <MenuItem value="En Proceso">En Proceso</MenuItem>
             <MenuItem value="Cerrado">Cerrado</MenuItem>
@@ -1575,28 +1710,118 @@ export default function TicketPage() {
           )}
           {/* Pause controls (moved) */}
           {!isNew && (
-            <Paper sx={{ p: 2, mt: 1 }} elevation={0}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Control de Pausa</Typography>
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-                <TextField select size="small" label="Motivo" value={pauseReasonId} onChange={e => setPauseReasonId(e.target.value)} sx={{ minWidth: 220 }} disabled={saving}>
+            <Paper
+              sx={{
+                p: 3,
+                mt: 2,
+                borderRadius: 3,
+                backgroundColor: theme => theme.palette.background.default,
+                border: theme => `1px solid ${theme.palette.divider}`
+              }}
+              elevation={0}
+            >
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700 }}>Control de Pausa</Typography>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                <TextField
+                  select
+                  size="small"
+                  label="Motivo"
+                  value={pauseReasonId}
+                  onChange={e => setPauseReasonId(e.target.value)}
+                  sx={{
+                    minWidth: 220,
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      backgroundColor: theme => theme.palette.background.paper,
+                    }
+                  }}
+                  disabled={saving}
+                >
                   <MenuItem value="">(Sin seleccionar)</MenuItem>
                   {pauseReasons.map(r => <MenuItem key={r.id} value={r.id}>{r.nombre}</MenuItem>)}
                 </TextField>
-                <TextField size="small" label="Comentario" value={pauseComment} onChange={e => setPauseComment(e.target.value)} disabled={saving} />
+                <TextField
+                  size="small"
+                  label="Comentario"
+                  value={pauseComment}
+                  onChange={e => setPauseComment(e.target.value)}
+                  sx={{
+                    minWidth: 200,
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      backgroundColor: theme => theme.palette.background.paper,
+                    }
+                  }}
+                  disabled={saving}
+                />
                 {!isPausedState ? (
                   <>
-                    <Button disabled={saving || !canControlPause || pauseLoading} variant="contained" color="warning" onClick={handlePause}>Pausar</Button>
+                    <Button
+                      disabled={saving || !canControlPause || pauseLoading}
+                      variant="contained"
+                      color="warning"
+                      onClick={handlePause}
+                      sx={{
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        px: 3,
+                        '&:hover': {
+                          backgroundColor: theme => theme.palette.warning.dark,
+                        }
+                      }}
+                    >
+                      Pausar
+                    </Button>
                     {failedNotification && (
-                      <Button disabled={notifRetryLoading} variant="outlined" color="secondary" onClick={resendNotification} startIcon={notifRetryLoading ? <CircularProgress size={16} /> : null}>
+                      <Button
+                        disabled={notifRetryLoading}
+                        variant="outlined"
+                        color="secondary"
+                        onClick={resendNotification}
+                        startIcon={notifRetryLoading ? <CircularProgress size={16} /> : null}
+                        sx={{
+                          borderRadius: 2,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                        }}
+                      >
                         Reintentar notificación
                       </Button>
                     )}
                   </>
                 ) : (
                   <>
-                    <Button disabled={saving || !canControlPause || pauseLoading} variant="contained" color="success" onClick={handleResume}>Reanudar</Button>
+                    <Button
+                      disabled={saving || !canControlPause || pauseLoading}
+                      variant="contained"
+                      color="success"
+                      onClick={handleResume}
+                      sx={{
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        px: 3,
+                        '&:hover': {
+                          backgroundColor: theme => theme.palette.success.dark,
+                        }
+                      }}
+                    >
+                      Reanudar
+                    </Button>
                     {failedNotification && (
-                      <Button disabled={notifRetryLoading} variant="outlined" color="secondary" onClick={resendNotification} startIcon={notifRetryLoading ? <CircularProgress size={16} /> : null}>
+                      <Button
+                        disabled={notifRetryLoading}
+                        variant="outlined"
+                        color="secondary"
+                        onClick={resendNotification}
+                        startIcon={notifRetryLoading ? <CircularProgress size={16} /> : null}
+                        sx={{
+                          borderRadius: 2,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                        }}
+                      >
                         Reintentar notificación
                       </Button>
                     )}
@@ -1632,26 +1857,67 @@ export default function TicketPage() {
             </Paper>
           )}
           {/* botones al final del formulario */}
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
-            <Button variant="outlined" onClick={() => navigate('/tickets')} color="inherit" disabled={saving && !justSaved}>Volver</Button>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
+            <Button
+              variant="outlined"
+              onClick={() => navigate('/tickets')}
+              color="inherit"
+              disabled={saving && !justSaved}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 3,
+                '&:hover': {
+                  backgroundColor: theme => theme.palette.action.hover,
+                }
+              }}
+            >
+              Volver
+            </Button>
             <Tooltip title={failedNotification ? (failedNotification.message || 'Reintentar notificación') : 'Reintentar notificación (reconstruye desde ticket actual)'}>
               <span>
-                <Button variant="outlined" color="inherit" onClick={resendNotification} disabled={notifRetryLoading} sx={{ ml: 1 }}>
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  onClick={resendNotification}
+                  disabled={notifRetryLoading}
+                  sx={{
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 2,
+                    '&:hover': {
+                      backgroundColor: theme => theme.palette.action.hover,
+                    }
+                  }}
+                >
                   {notifRetryLoading ? <CircularProgress size={16} /> : 'Reintentar notificación'}
                 </Button>
               </span>
             </Tooltip>
             <Tooltip placement="bottom" title={saving ? 'Guardando ticket...' : (isNew ? 'Crear ticket' : 'Actualizar ticket')}>
               <span>
-                <Button 
-                  variant="contained" 
-                  onClick={handleSave} 
-          disabled={
-            (saving && !justSaved) ||
-            (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || isCreator || (reassignMode && wasOriginallyAssigned) || isSameDepartment)) ||
-            (originalEstado === 'Cerrado' && !isAdmin)
-             }
+                <Button
+                  variant="contained"
+                  onClick={handleSave}
+                  disabled={
+                    (saving && !justSaved) ||
+                    (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || isCreator || (reassignMode && wasOriginallyAssigned) || isSameDepartment)) ||
+                    (originalEstado === 'Cerrado' && !isAdmin)
+                  }
                   startIcon={isNew ? <AddIcon /> : <UpdateIcon />}
+                  sx={{
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    px: 3,
+                    py: 1.5,
+                    boxShadow: theme => theme.shadows[4],
+                    '&:hover': {
+                      boxShadow: theme => theme.shadows[6],
+                    }
+                  }}
                 >
                   {saving && !justSaved ? (isNew ? 'CREANDO...' : 'GUARDANDO...') : (justSaved ? 'ENVIADO' : (isNew ? 'CREAR TICKET' : 'ACTUALIZAR TICKET'))}
                 </Button>

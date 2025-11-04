@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { ref, get, set, update } from 'firebase/database';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app as firebaseApp } from '../firebase/firebaseConfig';
+import { ref, get, set } from 'firebase/database';
 import { auth, db as defaultDb } from '../firebase/firebaseConfig';
 import { useDb } from './DbContext';
 import { AuthContext } from './AuthContextInternal';
@@ -179,117 +177,6 @@ export function AuthProvider({ children }) {
             // NO buscar en otras DBs - esto era un agujero de seguridad
           }
         }
-
-        // Si el proveedor incluye Microsoft, intentar enriquecer con Graph via Cloud Function
-        try {
-          const providerIds = (firebaseUser.providerData || []).map(p => p.providerId || '').join(',');
-          const emailLower = String(firebaseUser.email || '').toLowerCase();
-          const isMicrosoft = providerIds.includes('microsoft') || emailLower.includes('onmicrosoft.com') || emailLower.includes('microsoft.com');
-          console.debug('AuthContext: providerIds=', providerIds, 'email=', emailLower, 'isMicrosoft=', isMicrosoft);
-          if (isMicrosoft) {
-              try {
-              // Forzar región donde desplegaste las funciones (ajusta si usaste otra región)
-              const functions = getFunctions(firebaseApp, 'us-central1');
-              const callable = httpsCallable(functions, 'getGraphProfile');
-                const emailToQuery = firebaseUser.email;
-                console.debug('AuthContext: llamando getGraphProfile para', emailToQuery);
-                const resp = await callable({ email: emailToQuery });
-                console.debug('AuthContext: getGraphProfile response', resp);
-                const profile = resp.data?.profile || null;
-                if (profile) {
-                  // Mapear campos comunes de Graph (sin persistir departamento todavía)
-                  const enriched = {
-                    nombre: (profile.givenName || profile.displayName || (data?.nombre || '')).toString().trim(),
-                    apellido: (profile.surname || data?.apellido || '').toString().trim(),
-                    email: (profile.mail || profile.userPrincipalName || firebaseUser.email).toString().trim(),
-                    // departamento validated below before persisting
-                    telefono: (profile.mobilePhone || data?.telefono || '').toString().trim(),
-                    cargo: (profile.jobTitle || data?.cargo || '').toString().trim(),
-                    rol: data?.rol || ((firebaseUser.email === 'admin@costaricacc.com') ? 'admin' : 'estandar'),
-                  };
-                  console.debug('AuthContext: perfil enriquecido detectado (sin departamento), persistiendo en DB', enriched);
-                  // Persistir en DB seleccionada (usar update para merge en lugar de set)
-                  try {
-                    const targetDb = db || defaultDb;
-                    if (targetDb) {
-                      // Antes de persistir, validar si profile.department existe en la lista de departamentos
-                      let deptToPersist = null;
-                      const graphDept = (profile.department || '').toString().trim();
-                      if (graphDept) {
-                        try {
-                          const depsSnapCheck = await get(ref(targetDb, 'departamentos'));
-                          if (depsSnapCheck && depsSnapCheck.exists()) {
-                            const depsCheck = depsSnapCheck.val();
-                            for (const nombre of Object.values(depsCheck)) {
-                              if (String(nombre).toLowerCase() === String(graphDept).toLowerCase()) {
-                                deptToPersist = nombre;
-                                break;
-                              }
-                            }
-                          }
-                        } catch (depsErr) {
-                          console.debug('AuthContext: no se pudo validar department contra departamentos list', depsErr);
-                        }
-                      }
-                      if (deptToPersist) {
-                        enriched.departamento = deptToPersist;
-                      }
-                      // Si no hay departamento validado y el provider es Microsoft, marcar necesidad de selección
-                      if (!enriched.departamento) {
-                        const providerIdsLocal = (firebaseUser.providerData || []).map(p => p.providerId || '').join(',');
-                        const isMicrosoftLocal = providerIdsLocal.includes('microsoft') || String(firebaseUser.email || '').toLowerCase().includes('microsoft');
-                        if (isMicrosoftLocal) {
-                          enriched.needsDepartmentSelection = true;
-                          try {
-                            const targetDb2 = db || defaultDb;
-                            if (targetDb2) await set(ref(targetDb2, `usuarios/${firebaseUser.uid}/needsDepartmentSelection`), true);
-                          } catch (eSet) {
-                            const isPerm = eSet && (eSet.code?.includes('permission-denied') || String(eSet).toLowerCase().includes('permission denied'));
-                            if (isPerm) setDbAccessError('permission-denied');
-                            else console.debug('AuthContext: no se pudo persistir needsDepartmentSelection', eSet);
-                          }
-                        }
-                      }
-                      // Guardar también el valor crudo proveniente de Microsoft para mostrar en Perfil
-                      const rawGraphDept = (profile.department || '').toString().trim();
-                      if (rawGraphDept) enriched.departamentoMs = rawGraphDept;
-                      await update(ref(targetDb, `usuarios/${firebaseUser.uid}`), enriched);
-                      data = { ...(data || {}), ...enriched };
-                      console.debug('AuthContext: perfil enriquecido persistido en DB (update)', { persistedDepartamento: enriched.departamento });
-                    } else {
-                      data = enriched;
-                      console.debug('AuthContext: no hay DB, usando perfil enriquecido en memoria');
-                    }
-                  } catch (persistErr) {
-                    const isPerm = persistErr && (persistErr.code?.includes('permission-denied') || String(persistErr).toLowerCase().includes('permission denied'));
-                    if (isPerm) {
-                      setDbAccessError('permission-denied');
-                      // Si pertenece al dominio de confianza, intentar persistir en defaultDb como fallback
-                      try {
-                        const emailLowerLocal = String(firebaseUser?.email || '').toLowerCase();
-                        if (emailLowerLocal.endsWith('@grupoheroica.com') && defaultDb) {
-                          await update(ref(defaultDb, `usuarios/${firebaseUser.uid}`), enriched);
-                          data = { ...(data || {}), ...enriched };
-                          console.debug('AuthContext: fallback persistido en defaultDb para usuario @grupoheroica.com');
-                        }
-                      } catch (fallbackErr) {
-                        console.warn('AuthContext: fallback a defaultDb falló', fallbackErr);
-                      }
-                    } else console.warn('AuthContext: fallo al persistir perfil enriquecido', persistErr);
-                    data = enriched; // usar en memoria
-                  }
-                } else {
-                  console.debug('AuthContext: getGraphProfile no devolvió profile');
-                }
-            } catch (callErr) {
-              // No bloquear si la función falla
-              console.debug('AuthContext: getGraphProfile fallo o no disponible', callErr && callErr.message ? callErr.message : callErr);
-            }
-          }
-        } catch (eGraph) {
-          console.debug('AuthContext: error al intentar enriquecer con Graph', eGraph);
-        }
-
   // Si aún no hay datos en la DB, construir un registro inicial y tratar de persistirlo
         if (!data) {
           let displayName = firebaseUser.displayName || '';

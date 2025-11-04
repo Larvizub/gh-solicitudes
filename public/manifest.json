@@ -10,13 +10,13 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://grupoheroica.com/wp-content/uploads/2023/10/Icono-verde.png",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://grupoheroica.com/wp-content/uploads/2023/10/Icono-verde.png",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

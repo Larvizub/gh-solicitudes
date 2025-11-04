@@ -2,7 +2,15 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { getDbForRecinto, RECINTO_DB_MAP } from '../firebase/multiDb';
 import { ref as dbRef, onValue, off } from 'firebase/database';
 
-const DbContext = createContext();
+const DbContext = createContext({
+  db: null,
+  recinto: 'GRUPO_HEROICA',
+  setRecinto: () => {},
+  loading: true,
+  RECINTO_DB_MAP: {},
+  tiposTickets: {},
+  subcategoriasTickets: {}
+});
 
 export function useDb() {
   return useContext(DbContext);
@@ -26,7 +34,9 @@ export function DbProvider({ children }) {
     const init = async () => {
       setLoading(true);
       try {
+        console.log('DbContext: Inicializando DB para recinto', recinto);
         const inst = await getDbForRecinto(recinto);
+        console.log('DbContext: DB inicializada correctamente', inst ? 'OK' : 'NULL');
         if (!cancelled) setDb(inst);
       } catch (e) {
         console.error('Error inicializando DB para recinto', recinto, e);
