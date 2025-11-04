@@ -1784,6 +1784,9 @@ export default function TicketPage() {
                           borderRadius: 2,
                           textTransform: 'none',
                           fontWeight: 600,
+                          px: 3,
+                          py: 1.5,
+                          minHeight: 40,
                         }}
                       >
                         Reintentar notificación
@@ -1886,7 +1889,9 @@ export default function TicketPage() {
                     borderRadius: 2,
                     textTransform: 'none',
                     fontWeight: 600,
-                    px: 2,
+                    px: 3,
+                    py: 1.5,
+                    minHeight: 40,
                     '&:hover': {
                       backgroundColor: theme => theme.palette.action.hover,
                     }
