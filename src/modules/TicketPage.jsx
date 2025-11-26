@@ -6,6 +6,7 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import SendIcon from '@mui/icons-material/Send';
 import AddIcon from '@mui/icons-material/Add';
+import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import UpdateIcon from '@mui/icons-material/Update';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { ref as dbRef, get, set, update, push, runTransaction, remove } from 'firebase/database';
@@ -86,6 +87,11 @@ export default function TicketPage() {
   // Estados para configuraciones SLA
   const [slaConfigs, setSlaConfigs] = useState({});
   const [slaSubcats, setSlaSubcats] = useState({});
+
+  // Estados para menú de extras (adjuntos y notificaciones)
+  const [extrasOpen, setExtrasOpen] = useState(false);
+  const [additionalEmails, setAdditionalEmails] = useState([]);
+  const [showEmailInput, setShowEmailInput] = useState(false);
 
   const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
   const canDelete = !isNew && (isAdmin || (user?.email && form?.usuarioEmail && String(form.usuarioEmail).toLowerCase() === String(user.email).toLowerCase()));
@@ -801,10 +807,14 @@ export default function TicketPage() {
           subject,
           actionMsg: resumenCambios,
           htmlOverride: html,
-          cc: []
+          cc: additionalEmails || []
         });
         await sendTicketMail(payload);
         setSnackbar({ open: true, message: 'Comentario agregado (Notificación enviada)', severity: 'success' });
+        // Limpiar correos adicionales tras envío exitoso
+        setAdditionalEmails([]);
+        setShowEmailInput(false);
+        setExtrasOpen(false);
       } catch (e) {
         console.error('Error enviando notificación de comentario', e);
         setSnackbar({ open: true, message: 'Comentario agregado (falló notificación)', severity: 'warning' });
@@ -1696,21 +1706,120 @@ export default function TicketPage() {
                     '& .MuiInputBase-root': { borderRadius: 3 }
                   }}
                 />
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 0.5 }}>
-                  <Tooltip title={newCommentFile ? newCommentFile.name : 'Adjuntar archivo'} placement="top">
-                    <span>
-                      <IconButton
-                        component="label"
-                        size="small"
-                        color={newCommentFile ? 'primary' : 'default'}
-                        disabled={saving}
-                        sx={{ bgcolor: newCommentFile ? 'primary.main' : 'action.hover', color: newCommentFile ? 'primary.contrastText' : 'text.secondary', '&:hover': { bgcolor: newCommentFile ? 'primary.dark' : 'action.selected' } }}
-                      >
-                        <AttachFileIcon fontSize="small" />
-                        <input type="file" hidden onChange={e => setNewCommentFile(e.target.files[0])} />
-                      </IconButton>
-                    </span>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, mt: 1.5, flexWrap: 'wrap', width: '100%' }}>
+                  {/* Email Input Area */}
+                  {showEmailInput && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '1 1 auto', minWidth: 280 }}>
+                      <Autocomplete
+                        multiple
+                        fullWidth
+                        freeSolo
+                        disableClearable
+                        options={(usuarios || []).map(u => ({
+                          label: `${(u.nombre || '').trim()} ${(u.apellido || '').trim()}`.trim() || u.email,
+                          email: (u.email || '').toLowerCase(),
+                          id: u.id
+                        }))}
+                        getOptionLabel={(option) => typeof option === 'string' ? option : (option.email || option.label || '')}
+                        filterSelectedOptions
+                        value={additionalEmails || []}
+                        onChange={(_, newVal) => {
+                          const normalized = (newVal || []).map(v => {
+                            if (!v) return '';
+                            if (typeof v === 'string') return v.trim();
+                            return v.email || (v.label ? String(v.label).trim() : '');
+                          }).filter(Boolean).map(s => String(s).toLowerCase());
+                          setAdditionalEmails(Array.from(new Set(normalized)));
+                        }}
+                        renderTags={(value, getTagProps) =>
+                          value.map((option, index) => {
+                            const email = typeof option === 'string' ? option : option.email || option.label;
+                            return (
+                              <Chip
+                                key={String(email) + index}
+                                label={email}
+                                size="small"
+                                {...getTagProps({ index })}
+                                onDelete={() => setAdditionalEmails(prev => prev.filter(e => String(e).toLowerCase() !== String(email).toLowerCase()))}
+                              />
+                            );
+                          })
+                        }
+                        renderOption={(props, option) => (
+                          <li {...props} key={typeof option === 'string' ? option : option.email}>
+                            {typeof option === 'string' ? option : option.email}
+                          </li>
+                        )}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            size="small"
+                            label="Correos adicionales"
+                            fullWidth
+                            sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2, backgroundColor: theme => theme.palette.background.paper, '&:hover': { backgroundColor: theme => theme.palette.action.hover }, '&.Mui-focused': { backgroundColor: theme => theme.palette.background.paper } } }}
+                          />
+                        )}
+                      />
+                    </Box>
+                  )}
+
+                  {/* File Indicator */}
+                  {newCommentFile && !extrasOpen && (
+                    <Chip
+                      label={newCommentFile.name}
+                      onDelete={() => setNewCommentFile(null)}
+                      size="small"
+                      icon={<AttachFileIcon />}
+                      sx={{ mr: 1, maxWidth: 200 }}
+                    />
+                  )}
+
+                  {/* Options Menu (Visible if extrasOpen is true) */}
+                  {extrasOpen && (
+                    <Box sx={{ display: 'flex', gap: 1, animation: 'fadeIn 0.3s', alignItems: 'center' }}>
+                      <Tooltip title={newCommentFile ? newCommentFile.name : 'Adjuntar archivo'} placement="top">
+                        <span>
+                          <IconButton
+                            component="label"
+                            size="small"
+                            color={newCommentFile ? 'primary' : 'default'}
+                            disabled={saving}
+                            sx={{ bgcolor: newCommentFile ? 'primary.main' : 'action.hover', color: newCommentFile ? 'primary.contrastText' : 'text.secondary', '&:hover': { bgcolor: newCommentFile ? 'primary.dark' : 'action.selected' } }}
+                          >
+                            <AttachFileIcon fontSize="small" />
+                            <input type="file" hidden onChange={e => { setNewCommentFile(e.target.files[0]); setExtrasOpen(false); }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                          <Tooltip title="Notificación adicional" placement="top">
+                            <IconButton
+                              size="small"
+                              onClick={() => { setShowEmailInput(!showEmailInput); setExtrasOpen(false); }}
+                              sx={{ bgcolor: showEmailInput ? 'primary.light' : 'action.hover', color: showEmailInput ? 'primary.contrastText' : 'text.secondary' }}
+                            >
+                              <MailOutlineIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                    </Box>
+                  )}
+
+                  {/* The + Button */}
+                  <Tooltip title={extrasOpen ? 'Cerrar opciones' : 'Más opciones'} placement="top">
+                    <IconButton
+                      onClick={() => setExtrasOpen(!extrasOpen)}
+                      size="small"
+                      sx={{
+                        transform: extrasOpen ? 'rotate(45deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.25s ease-in-out, background-color 0.15s',
+                        bgcolor: extrasOpen ? 'error.main' : 'transparent',
+                        color: extrasOpen ? 'error.contrastText' : 'inherit',
+                        '&:hover': { bgcolor: extrasOpen ? 'error.dark' : 'action.hover' }
+                      }}
+                    >
+                      <AddIcon fontSize="small" />
+                    </IconButton>
                   </Tooltip>
+
                   <Tooltip title="Enviar comentario" placement="top">
                     <span>
                       <IconButton
