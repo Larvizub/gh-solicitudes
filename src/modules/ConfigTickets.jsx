@@ -10,8 +10,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert,
-  Paper,
   Grid,
   Chip,
   Table,
@@ -20,13 +18,26 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Avatar,
+  alpha,
+  useTheme,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import CategoryIcon from "@mui/icons-material/Category";
 import { ref, get, set, remove, push } from "firebase/database";
 import { useDb } from "../context/DbContext";
 import { getDbForRecinto } from "../firebase/multiDb";
+import { 
+  PageHeader, 
+  GlassCard, 
+  ModuleContainer, 
+  SectionContainer,
+  dialogStyles,
+  EmptyState 
+} from '../components/ui/SharedStyles';
+import useNotification from '../context/useNotification';
 
 export default function ConfigTickets() {
   const { db: ctxDb, recinto, tiposTickets: tiposFromCtx } = useDb();
@@ -38,6 +49,19 @@ export default function ConfigTickets() {
   const [editTipo, setEditTipo] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const notify = useNotification();
+  const theme = useTheme();
+
+  React.useEffect(() => {
+    if (error) {
+      try { notify(error, 'error', { mode: 'toast', persist: true }); } catch { /* ignore */ }
+      setError('');
+    }
+    if (success) {
+      try { notify(success, 'success', { mode: 'toast' }); } catch { /* ignore */ }
+      setSuccess('');
+    }
+  }, [error, success, notify]);
 
   // Cargar departamentos y tipos de tickets
   useEffect(() => {
@@ -136,122 +160,125 @@ export default function ConfigTickets() {
       : []
   );
 
+  const totalTipos = tiposTabla.length;
+
   return (
-    <Box
-      sx={{
-        p: { xs: 1, sm: 2 },
-        display: "flex",
-        flexDirection: "column",
-        flex: 1,
-        minWidth: 0,
-        minHeight: "90vh",
-        width: "100%",
-        maxWidth: "100vw",
-        margin: "0 auto",
-        boxSizing: "border-box",
-      }}
-    >
-      <Typography variant="h5" sx={{ mb: 2 }}>
-        Configuración de Tickets
-      </Typography>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }}>
-          {success}
-        </Alert>
-      )}
-      <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
+    <ModuleContainer>
+      <PageHeader
+        title="Categorías de Tickets"
+        subtitle={`${totalTipos} tipos en ${departamentos.length} departamentos`}
+        icon={CategoryIcon}
+        gradient="warning"
+      />
+
+      {/* Grid de departamentos con sus tipos */}
+      <Grid container spacing={2} sx={{ mb: 4 }}>
         {departamentos.map((dep) => (
-          <Grid item xs={12} sm={6} md={4} lg={3} key={dep.id} sx={{ display: 'flex', minWidth: 260, maxWidth: 400 }}>
-            <Paper elevation={1} sx={{
-              p: 2,
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              minWidth: 260,
-              maxWidth: 400,
-              width: '100%',
-              borderRadius: 3,
-              boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)',
-            }}>
-              <Box sx={{ display: "flex", alignItems: "center", mb: 1 }}>
-                <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 600 }}>
+          <Grid item xs={12} sm={6} md={4} lg={3} key={dep.id}>
+            <GlassCard sx={{ height: '100%', minHeight: 180 }}>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                <Avatar 
+                  sx={{ 
+                    bgcolor: alpha(theme.palette.warning.main, 0.15),
+                    mr: 1.5,
+                    width: 36,
+                    height: 36,
+                  }}
+                >
+                  <CategoryIcon sx={{ color: theme.palette.warning.main, fontSize: 20 }} />
+                </Avatar>
+                <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 700 }}>
                   {dep.nombre}
                 </Typography>
-                <IconButton color="primary" onClick={() => handleOpenDialog(dep.id)} size="small" sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
-                  <AddIcon />
+                <IconButton 
+                  onClick={() => handleOpenDialog(dep.id)} 
+                  size="small"
+                  sx={{ 
+                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) }
+                  }}
+                >
+                  <AddIcon sx={{ color: theme.palette.primary.main }} />
                 </IconButton>
               </Box>
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, flex: 1, alignItems: 'flex-start' }}>
-                {(tipos[dep.id]
-                  ? Object.entries(tipos[dep.id]).map(([tipoId, nombre]) => (
-                      <Chip
-                        key={tipoId}
-                        label={nombre}
-                        onDelete={() => handleDeleteTipo(dep.id, tipoId)}
-                        deleteIcon={<DeleteIcon fontSize="small" />}
-                        sx={{ mb: 1, fontWeight: 500, background: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.primary.main, color: (theme) => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : '#fff' }}
-                        onClick={() => handleOpenDialog(dep.id, { id: tipoId, nombre })}
-                      />
-                    ))
-                  : <Typography variant="body2" color="text.secondary">Sin tipos</Typography>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {tipos[dep.id] ? (
+                  Object.entries(tipos[dep.id]).map(([tipoId, nombre]) => (
+                    <Chip
+                      key={tipoId}
+                      label={nombre}
+                      onDelete={() => handleDeleteTipo(dep.id, tipoId)}
+                      deleteIcon={<DeleteIcon fontSize="small" />}
+                      onClick={() => handleOpenDialog(dep.id, { id: tipoId, nombre })}
+                      sx={{ 
+                        fontWeight: 600,
+                        bgcolor: alpha(theme.palette.primary.main, 0.1),
+                        color: theme.palette.primary.main,
+                        '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) },
+                        '& .MuiChip-deleteIcon': { color: theme.palette.error.main }
+                      }}
+                    />
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                    Sin categorías
+                  </Typography>
                 )}
               </Box>
-            </Paper>
+            </GlassCard>
           </Grid>
         ))}
       </Grid>
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="xs">
-        <DialogTitle>{editTipo ? "Editar tipo de ticket" : "Agregar tipo de ticket"}</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Nombre del tipo"
-            fullWidth
-            value={nuevoTipo}
-            onChange={e => setNuevoTipo(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error">Cancelar</Button>
-          <Button onClick={handleSaveTipo} variant="contained" sx={{ bgcolor: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: (theme) => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined }}>Guardar</Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Tabla de tipos de ticket */}
-      <Box sx={{ mt: 4, width: '100%', maxWidth: '100vw' }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          Tipos de ticket (vista tabla)
-        </Typography>
-        <TableContainer component={Paper} sx={{ width: '100%', maxWidth: '100vw', overflowX: 'auto' }}>
+      <SectionContainer title="Vista de Tabla" icon={CategoryIcon}>
+        <TableContainer sx={{ borderRadius: 2, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
           <Table size="small">
             <TableHead>
-              <TableRow>
-                <TableCell>Departamento</TableCell>
-                <TableCell>Tipo</TableCell>
-                <TableCell align="right">Acciones</TableCell>
+              <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
+                <TableCell sx={{ fontWeight: 700 }}>Departamento</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Categoría</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {tiposTabla.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} align="center">Sin tipos registrados</TableCell>
+                  <TableCell colSpan={3}>
+                    <EmptyState 
+                      icon={CategoryIcon} 
+                      title="Sin categorías" 
+                      subtitle="Agrega categorías desde los departamentos arriba"
+                    />
+                  </TableCell>
                 </TableRow>
               ) : (
                 tiposTabla.map(tipo => (
-                  <TableRow key={tipo.id + '-' + tipo.depId}>
-                    <TableCell>{tipo.departamento}</TableCell>
-                    <TableCell>{tipo.nombre}</TableCell>
+                  <TableRow 
+                    key={tipo.id + '-' + tipo.depId}
+                    sx={{ '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.02) } }}
+                  >
+                    <TableCell>
+                      <Chip 
+                        label={tipo.departamento} 
+                        size="small" 
+                        sx={{ fontWeight: 600 }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 500 }}>{tipo.nombre}</TableCell>
                     <TableCell align="right">
-                      <IconButton size="small" onClick={() => handleOpenDialog(tipo.depId, { id: tipo.id, nombre: tipo.nombre })} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
+                      <IconButton 
+                        size="small" 
+                        onClick={() => handleOpenDialog(tipo.depId, { id: tipo.id, nombre: tipo.nombre })}
+                        sx={{ color: theme.palette.primary.main }}
+                      >
                         <EditIcon fontSize="small" />
                       </IconButton>
-                      <IconButton size="small" color="error" onClick={() => handleDeleteTipo(tipo.depId, tipo.id)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
+                      <IconButton 
+                        size="small" 
+                        onClick={() => handleDeleteTipo(tipo.depId, tipo.id)}
+                        sx={{ color: theme.palette.error.main }}
+                      >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </TableCell>
@@ -261,7 +288,38 @@ export default function ConfigTickets() {
             </TableBody>
           </Table>
         </TableContainer>
-      </Box>
-    </Box>
+      </SectionContainer>
+
+      <Dialog 
+        open={openDialog} 
+        onClose={() => setOpenDialog(false)} 
+        fullWidth 
+        maxWidth="xs"
+        PaperProps={{ sx: dialogStyles.paper }}
+      >
+        <DialogTitle sx={dialogStyles.title('warning')(theme)}>
+          {editTipo ? "Editar Categoría" : "Nueva Categoría"}
+        </DialogTitle>
+        <DialogContent sx={dialogStyles.content}>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Nombre de la categoría"
+            fullWidth
+            value={nuevoTipo}
+            onChange={e => setNuevoTipo(e.target.value)}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions sx={dialogStyles.actions}>
+          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error" sx={{ fontWeight: 600 }}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSaveTipo} variant="contained" sx={{ fontWeight: 600 }}>
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </ModuleContainer>
   );
 }

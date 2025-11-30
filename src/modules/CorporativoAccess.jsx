@@ -1,18 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Box, Typography, Paper, Grid, TextField, MenuItem, Button, CircularProgress,
+  Box, Typography, Grid, TextField, Button, CircularProgress,
   Table, TableBody, TableCell, TableHead, TableRow, Checkbox, Snackbar, Alert,
   TableContainer, Chip, Divider, Stack
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
+import BusinessIcon from '@mui/icons-material/Business';
+import PeopleIcon from '@mui/icons-material/People';
+import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import { ref, get, set, remove } from 'firebase/database';
 import { getDbForRecinto } from '../firebase/multiDb';
 import { useAuth } from '../context/useAuth';
 import { useDb } from '../context/DbContext';
+import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState, gradients } from '../components/ui/SharedStyles';
+import useNotification from '../context/useNotification';
 
 // Módulo para gestionar autorizaciones de usuarios de recintos a la base Corporate
 export default function CorporativoAccess() {
   const { userData } = useAuth();
   const { recinto: currentRecinto } = useDb();
+  const theme = useTheme();
+  const { notify } = useNotification();
   // Determinar recinto del usuario: preferir userData.recinto si está disponible;
   // en caso contrario usar el recinto actual del contexto o el guardado en localStorage.
   const userRecinto = userData?.recinto || currentRecinto || localStorage.getItem('selectedRecinto') || 'CCCI';
@@ -26,6 +34,13 @@ export default function CorporativoAccess() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const AUTH_PATH = 'corporativo_authorized_users';
+
+  // Mostrar notificaciones
+  useEffect(() => {
+    if (snackbar.open) {
+      notify(snackbar.message, snackbar.severity);
+    }
+  }, [snackbar, notify]);
 
   useEffect(() => {
     // cargar autorizados de la base corporativa al montar o cuando cambie el recinto
@@ -149,10 +164,15 @@ export default function CorporativoAccess() {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, width: '100%' }}>
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>Gestión de acceso a Corporativo</Typography>
+    <ModuleContainer>
+      <PageHeader 
+        title="Gestión de acceso a Corporativo" 
+        subtitle="Autoriza usuarios de tu recinto para acceder a la base corporativa"
+        icon={<BusinessIcon />}
+        gradient={gradients.dark}
+      />
 
-      <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 3 }}>
+      <GlassCard sx={{ p: 3, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={4}>
             <TextField
@@ -169,35 +189,41 @@ export default function CorporativoAccess() {
           </Grid>
           <Grid item xs={12} md={4}>
             <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button variant="contained" onClick={fetchSourceUsers} disabled={loadingSource}>Cargar usuarios</Button>
+              <Button 
+                variant="contained" 
+                onClick={fetchSourceUsers} 
+                disabled={loadingSource}
+                sx={{ background: gradients.primary, '&:hover': { opacity: 0.9 } }}
+              >
+                Cargar usuarios
+              </Button>
               <Button variant="outlined" onClick={fetchAuthorized} disabled={loadingAuth}>Refrescar</Button>
-              {/* Diagnosticar button removed as requested */}
             </Stack>
           </Grid>
         </Grid>
-      </Paper>
+      </GlassCard>
 
-      <Grid container spacing={2}>
+      <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
-          <Paper elevation={1} sx={{ p: 2, minHeight: 320, borderRadius: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>Usuarios en {sourceRecinto}</Typography>
+          <SectionContainer title={`Usuarios en ${sourceRecinto}`} icon={<PeopleIcon />}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
               <Chip
                 label={`${usuariosOrigen.length} encontrados`}
                 size="small"
                 color="info"
                 variant="outlined"
-                sx={{ ml: 1, fontWeight: 600 }}
+                sx={{ fontWeight: 600 }}
               />
             </Box>
-            <Divider sx={{ mb: 1 }} />
             {loadingSource ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>
+            ) : usuariosOrigen.length === 0 ? (
+              <EmptyState message="Carga usuarios del recinto origen" icon={<PeopleIcon />} />
             ) : (
               <TableContainer>
                 <Table size="small">
                   <TableHead>
-                    <TableRow sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.grey[100] }}>
+                    <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.08) }}>
                       <TableCell></TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Nombre</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Email / Usuario</TableCell>
@@ -206,7 +232,11 @@ export default function CorporativoAccess() {
                   </TableHead>
                   <TableBody>
                     {usuariosOrigen.map(u => (
-                      <TableRow key={u.id} hover>
+                      <TableRow 
+                        key={u.id} 
+                        hover
+                        sx={{ '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.04) } }}
+                      >
                         <TableCell padding="checkbox">
                           <Checkbox checked={selectedIds.has(u.id)} onChange={() => toggleSelect(u.id)} />
                         </TableCell>
@@ -220,32 +250,39 @@ export default function CorporativoAccess() {
               </TableContainer>
             )}
             <Box sx={{ display: 'flex', gap: 1, mt: 2, justifyContent: 'flex-end' }}>
-              <Button variant="contained" disabled={selectedIds.size===0} onClick={authorizeSelected}>Autorizar seleccionados</Button>
+              <Button 
+                variant="contained" 
+                disabled={selectedIds.size===0} 
+                onClick={authorizeSelected}
+                sx={{ background: gradients.success, '&:hover': { opacity: 0.9 } }}
+              >
+                Autorizar seleccionados
+              </Button>
               <Button variant="outlined" onClick={()=>setSelectedIds(new Set())}>Limpiar</Button>
             </Box>
-          </Paper>
+          </SectionContainer>
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Paper elevation={1} sx={{ p: 2, minHeight: 320, borderRadius: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>Usuarios autorizados en {corporateRecinto}</Typography>
+          <SectionContainer title={`Usuarios autorizados en ${corporateRecinto}`} icon={<VerifiedUserIcon />}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
               <Chip
                 label={`${Object.keys(authorized || {}).length} autorizados`}
                 size="small"
                 color="success"
                 variant="outlined"
-                sx={{ ml: 1, fontWeight: 600 }}
+                sx={{ fontWeight: 600 }}
               />
             </Box>
-            <Divider sx={{ mb: 1 }} />
             {loadingAuth ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>
+            ) : Object.keys(authorized || {}).length === 0 ? (
+              <EmptyState message="No hay usuarios autorizados" icon={<VerifiedUserIcon />} />
             ) : (
               <TableContainer>
                 <Table size="small">
                   <TableHead>
-                    <TableRow sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.grey[100] }}>
+                    <TableRow sx={{ bgcolor: alpha(theme.palette.success.main, 0.08) }}>
                       <TableCell sx={{ fontWeight: 700 }}>Nombre</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Origen</TableCell>
@@ -254,24 +291,41 @@ export default function CorporativoAccess() {
                   </TableHead>
                   <TableBody>
                     {Object.entries(authorized || {}).map(([id, info]) => (
-                      <TableRow key={id} hover>
+                      <TableRow 
+                        key={id} 
+                        hover
+                        sx={{ '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.04) } }}
+                      >
                         <TableCell>{info.displayName || id}</TableCell>
                         <TableCell>{info.email || ''}</TableCell>
                         <TableCell>{info.origenRecinto || ''}</TableCell>
-                        <TableCell><Button size="small" color="error" variant="outlined" onClick={()=>revoke(id)}>Revocar</Button></TableCell>
+                        <TableCell>
+                          <Button 
+                            size="small" 
+                            variant="outlined" 
+                            onClick={()=>revoke(id)}
+                            sx={{ 
+                              color: theme.palette.error.main,
+                              borderColor: theme.palette.error.main,
+                              '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.1) }
+                            }}
+                          >
+                            Revocar
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
             )}
-          </Paper>
+          </SectionContainer>
         </Grid>
       </Grid>
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert onClose={() => setSnackbar(s => ({ ...s, open: false }))} severity={snackbar.severity} sx={{ width: '100%' }}>{snackbar.message}</Alert>
       </Snackbar>
-    </Box>
+    </ModuleContainer>
   );
 }

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   Box,
-  Typography,
   IconButton,
   TextField,
   Button,
@@ -9,16 +8,25 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert,
-  Paper,
+  alpha,
+  useTheme,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
+import BusinessIcon from "@mui/icons-material/Business";
 import { DataGrid } from "@mui/x-data-grid";
 import { ref, get, set, remove, push } from "firebase/database";
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
+import { 
+  PageHeader, 
+  GlassCard, 
+  ModuleContainer, 
+  tableStyles, 
+  dialogStyles 
+} from '../components/ui/SharedStyles';
+import useNotification from '../context/useNotification';
 
 export default function Departamentos() {
   const { db: ctxDb, recinto } = useDb();
@@ -28,25 +36,44 @@ export default function Departamentos() {
   const [editId, setEditId] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+  const notify = useNotification();
+  const theme = useTheme();
+
+  React.useEffect(() => {
+    if (error) {
+      try { notify(error, 'error', { mode: 'toast', persist: true }); } catch { /* ignore */ }
+      setError('');
+    }
+    if (success) {
+      try { notify(success, 'success', { mode: 'toast' }); } catch { /* ignore */ }
+      setSuccess('');
+    }
+  }, [error, success, notify]);
 
   // Cargar departamentos
-  useEffect(() => {
-    const fetchDepartamentos = async () => {
-  const dbInstance = ctxDb || (recinto ? await getDbForRecinto(recinto) : null);
-  if (!dbInstance) return;
-  const snapshot = await get(ref(dbInstance, "departamentos"));
+  const fetchDepartamentos = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const dbInstance = ctxDb || (recinto ? await getDbForRecinto(recinto) : null);
+      if (!dbInstance) return;
+      const snapshot = await get(ref(dbInstance, "departamentos"));
       if (snapshot.exists()) {
         const data = snapshot.val();
-        // Guardar como array de objetos {id, nombre}
         setDepartamentos(
           Object.entries(data).map(([id, nombre]) => ({ id, nombre }))
         );
       } else {
         setDepartamentos([]);
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  }, [ctxDb, recinto]);
+
+  useEffect(() => {
     fetchDepartamentos();
-  }, [success, ctxDb, recinto]);
+  }, [success, fetchDepartamentos]);
 
   // Abrir diálogo para agregar o editar
   const handleOpenDialog = (dep = null) => {
@@ -113,7 +140,7 @@ export default function Departamentos() {
 
   // Columnas para DataGrid
   const columns = [
-    { field: "nombre", headerName: "Nombre", flex: 1 },
+    { field: "nombre", headerName: "Nombre", flex: 1, minWidth: 200 },
     {
       field: "acciones",
       headerName: "Acciones",
@@ -123,11 +150,14 @@ export default function Departamentos() {
         <Box>
           <IconButton
             onClick={() => handleOpenDialog(params.row)}
-            sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}
+            sx={{ color: theme.palette.primary.main }}
           >
             <EditIcon />
           </IconButton>
-          <IconButton onClick={() => handleDelete(params.row.id)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
+          <IconButton 
+            onClick={() => handleDelete(params.row.id)} 
+            sx={{ color: theme.palette.error.main }}
+          >
             <DeleteIcon />
           </IconButton>
         </Box>
@@ -136,91 +166,82 @@ export default function Departamentos() {
   ];
 
   return (
-    <Box
-      sx={{
-        p: { xs: 1, sm: 2 },
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        minWidth: 0,
-        minHeight: '90vh',
-        width: { xs: '100%', md: '80vw' },
-        maxWidth: '100vw',
-        margin: '0 auto',
-        boxSizing: 'border-box',
-      }}
-    >
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
-        Departamentos
-      </Typography>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-      <Paper elevation={1} sx={{ p: 2, borderRadius: 3, boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)', mb: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+    <ModuleContainer maxWidth="900px">
+      <PageHeader
+        title="Departamentos"
+        subtitle={`${departamentos.length} departamentos registrados`}
+        icon={BusinessIcon}
+        gradient="secondary"
+        onRefresh={fetchDepartamentos}
+        action={
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => handleOpenDialog()}
             sx={{
-              borderRadius: 2,
-              fontWeight: 500,
-              bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined,
-              color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined,
-              '& .MuiSvgIcon-root': { color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : 'inherit' },
+              bgcolor: alpha('#fff', 0.2),
+              color: '#fff',
+              fontWeight: 700,
+              '&:hover': { bgcolor: alpha('#fff', 0.3) },
             }}
           >
             Agregar
           </Button>
+        }
+      />
+
+      <GlassCard>
+        <Box sx={tableStyles.container(theme)}>
+          <DataGrid
+            rows={departamentos}
+            columns={columns}
+            pageSize={10}
+            rowsPerPageOptions={[5, 10, 20]}
+            disableSelectionOnClick
+            getRowId={(row) => row.id}
+            loading={loading}
+            localeText={{ noRowsLabel: 'No hay departamentos registrados' }}
+            sx={{
+              border: 'none',
+              minHeight: 400,
+              '& .MuiDataGrid-cell': {
+                fontSize: { xs: '0.9rem', sm: '0.95rem' },
+              },
+            }}
+          />
         </Box>
-  <DataGrid
-          rows={departamentos}
-          columns={columns}
-          pageSize={10}
-          rowsPerPageOptions={[5, 10, 20]}
-          disableSelectionOnClick
-          getRowId={(row) => row.id}
-          localeText={{ noRowsLabel: 'No hay departamentos' }}
-          sx={{
-            backgroundColor: 'background.paper',
-            borderRadius: 2,
-            boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)',
-            '& .MuiDataGrid-columnHeaders': {
-              background: theme => theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(90deg, #e3e6ec 0%, #f5f6fa 100%)',
-              color: theme => theme.palette.text.primary,
-              fontWeight: 700,
-              fontSize: '1.05rem',
-              letterSpacing: 0.5,
-              borderTopLeftRadius: 8,
-              borderTopRightRadius: 8,
-              textShadow: 'none',
-            },
-            '& .MuiDataGrid-row:hover': {
-              backgroundColor: theme => theme.palette.action.hover,
-            },
-            '& .MuiDataGrid-cell': {
-              fontSize: { xs: '0.95rem', sm: '1rem' },
-            },
-            minHeight: 400,
-          }}
-        />
-      </Paper>
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="xs">
-        <DialogTitle>{editId ? 'Editar Departamento' : 'Agregar Departamento'}</DialogTitle>
-        <DialogContent>
+      </GlassCard>
+
+      <Dialog 
+        open={openDialog} 
+        onClose={() => setOpenDialog(false)} 
+        fullWidth 
+        maxWidth="xs"
+        PaperProps={{ sx: dialogStyles.paper }}
+      >
+        <DialogTitle sx={dialogStyles.title('secondary')(theme)}>
+          {editId ? 'Editar Departamento' : 'Nuevo Departamento'}
+        </DialogTitle>
+        <DialogContent sx={dialogStyles.content}>
           <TextField
             autoFocus
             margin="dense"
-            label="Nombre"
+            label="Nombre del departamento"
             fullWidth
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
+            sx={{ mt: 1 }}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error">Cancelar</Button>
-          <Button onClick={handleSave} variant="contained">Guardar</Button>
+        <DialogActions sx={dialogStyles.actions}>
+          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error" sx={{ fontWeight: 600 }}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} variant="contained" sx={{ fontWeight: 600 }}>
+            Guardar
+          </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </ModuleContainer>
   );
 }

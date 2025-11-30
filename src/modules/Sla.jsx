@@ -1,9 +1,44 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Box, Typography, Paper, Grid, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, Button, TextField, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Chip, Alert } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
+import { 
+  Box, 
+  Typography, 
+  Grid, 
+  Table, 
+  TableHead, 
+  TableRow, 
+  TableCell, 
+  TableBody, 
+  TableContainer, 
+  Button, 
+  TextField, 
+  MenuItem, 
+  Dialog, 
+  DialogTitle, 
+  DialogContent, 
+  DialogActions, 
+  Chip,
+  CircularProgress,
+  alpha,
+  useTheme,
+  Avatar,
+} from '@mui/material';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WarningIcon from '@mui/icons-material/Warning';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { ref, get, set } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
+import { 
+  PageHeader, 
+  GlassCard, 
+  StatCard,
+  ModuleContainer, 
+  SectionContainer,
+  dialogStyles,
+  EmptyState 
+} from '../components/ui/SharedStyles';
+import useNotification from '../context/useNotification';
 
 // Módulo SLA - productivo y práctico
 // - Permite definir objetivos SLA (horas) por departamento y prioridad
@@ -51,6 +86,19 @@ export default function Sla() {
   const [ticketsLoaded, setTicketsLoaded] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [selectedDept, setSelectedDept] = useState('');
+  const notify = useNotification();
+  const theme = useTheme();
+
+  React.useEffect(() => {
+    if (error) {
+      try { notify(error, 'error', { mode: 'toast', persist: true }); } catch { /* ignore */ }
+      setError('');
+    }
+    if (success) {
+      try { notify(success, 'success', { mode: 'toast' }); } catch { /* ignore */ }
+      setSuccess('');
+    }
+  }, [error, success, notify]);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -274,44 +322,95 @@ export default function Sla() {
   };
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 3 }, width: '100%', maxWidth: '100vw', boxSizing: 'border-box' }}>
+    <ModuleContainer>
       {loading ? (
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6">Cargando SLA...</Typography>
-        </Paper>
+        <GlassCard sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+          <CircularProgress />
+          <Typography variant="h6" sx={{ ml: 2 }}>Cargando SLA...</Typography>
+        </GlassCard>
       ) : (
         <>
-          <Typography variant="h5" sx={{ mb: 3, fontWeight: 700 }}>SLA - Gestión</Typography>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+          <PageHeader
+            title="Gestión de SLA"
+            subtitle="Configura objetivos y monitorea cumplimiento"
+            icon={AccessTimeIcon}
+            gradient="purple"
+          />
+
+          {/* KPIs de escaneo */}
+          {scanResult.scanned && (
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={4}>
+                <StatCard
+                  title="Total Evaluados"
+                  value={scanResult.total}
+                  icon={AccessTimeIcon}
+                  gradient="info"
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <StatCard
+                  title="Dentro de SLA"
+                  value={scanResult.within}
+                  subtitle={scanResult.total > 0 ? `${Math.round((scanResult.within / scanResult.total) * 100)}% cumplimiento` : ''}
+                  icon={CheckCircleIcon}
+                  gradient="success"
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <StatCard
+                  title="Incumplidos"
+                  value={scanResult.breaches.length}
+                  icon={WarningIcon}
+                  gradient="error"
+                />
+              </Grid>
+            </Grid>
+          )}
+
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
-              <Paper sx={{ p: { xs: 1, sm: 2 }, borderRadius: 2 }} elevation={3}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Configuración de SLA (por Subcategoría)</Typography>
+              <SectionContainer title="Configuración SLA por Subcategoría" icon={AccessTimeIcon}>
                 <Box sx={{ mb: 2 }}>
-                  <TextField select fullWidth label="Filtrar por Departamento" value={selectedDept} onChange={e => setSelectedDept(e.target.value)} size="small">
+                  <TextField 
+                    select 
+                    fullWidth 
+                    label="Filtrar por Departamento" 
+                    value={selectedDept} 
+                    onChange={e => setSelectedDept(e.target.value)} 
+                    size="small"
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                  >
                     <MenuItem value="">Todos los departamentos</MenuItem>
                     {departamentos.map(dep => (
                       <MenuItem key={dep.id} value={dep.id}>{dep.nombre}</MenuItem>
                     ))}
                   </TextField>
                 </Box>
-                <TableContainer sx={{ display: { xs: 'none', sm: 'block' }, overflowX: 'auto' }}>
+                <TableContainer sx={{ display: { xs: 'none', sm: 'block' }, borderRadius: 2, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
                 <Table size="small">
                   <TableHead>
-                    <TableRow>
-                      <TableCell>Departamento</TableCell>
-                      <TableCell>Categoría</TableCell>
-                      <TableCell>Subcategoría</TableCell>
-                      <TableCell>Alta (h)</TableCell>
-                      <TableCell>Media (h)</TableCell>
-                      <TableCell>Baja (h)</TableCell>
-                      <TableCell align="right">Acciones</TableCell>
+                    <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
+                      <TableCell sx={{ fontWeight: 700 }}>Departamento</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Categoría</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Subcategoría</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Alta (h)</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Media (h)</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Baja (h)</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {subcatRows.filter(row => !selectedDept || row.depId === selectedDept).length === 0 && (
-                      <TableRow><TableCell colSpan={7}>No hay subcategorías {selectedDept ? 'para este departamento' : ''}</TableCell></TableRow>
+                      <TableRow>
+                        <TableCell colSpan={7}>
+                          <EmptyState 
+                            icon={AccessTimeIcon} 
+                            title="Sin subcategorías" 
+                            subtitle={selectedDept ? 'No hay subcategorías para este departamento' : 'Configura subcategorías primero'}
+                          />
+                        </TableCell>
+                      </TableRow>
                     )}
                     {subcatRows.filter(row => !selectedDept || row.depId === selectedDept).map(row => {
                       const { depId, tipoId, subId, nombre } = row;
@@ -323,15 +422,17 @@ export default function Sla() {
                       };
                       const [alta, media, baja] = [getVal('Alta'), getVal('Media'), getVal('Baja')];
                         return (
-                          <TableRow key={`${depId}-${tipoId}-${subId}`}>
-                            <TableCell>{departamentos.find(d=>d.id===depId)?.nombre || depId}</TableCell>
-                            <TableCell>{(tipos && tipos[depId] && tipos[depId][tipoId]) || tipoId}</TableCell>
+                          <TableRow key={`${depId}-${tipoId}-${subId}`} sx={{ '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.02) } }}>
+                            <TableCell>
+                              <Chip label={departamentos.find(d=>d.id===depId)?.nombre || depId} size="small" />
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 500 }}>{(tipos && tipos[depId] && tipos[depId][tipoId]) || tipoId}</TableCell>
                             <TableCell>{nombre}</TableCell>
-                            <TableCell><TextField size="small" type="number" defaultValue={alta} inputProps={{ min:0 }} sx={{ width: 100 }} id={`alta-${depId}-${tipoId}-${subId}`} /></TableCell>
-                            <TableCell><TextField size="small" type="number" defaultValue={media} inputProps={{ min:0 }} sx={{ width: 100 }} id={`media-${depId}-${tipoId}-${subId}`} /></TableCell>
-                            <TableCell><TextField size="small" type="number" defaultValue={baja} inputProps={{ min:0 }} sx={{ width: 100 }} id={`baja-${depId}-${tipoId}-${subId}`} /></TableCell>
+                            <TableCell><TextField size="small" type="number" defaultValue={alta} inputProps={{ min:0 }} sx={{ width: 80 }} id={`alta-${depId}-${tipoId}-${subId}`} /></TableCell>
+                            <TableCell><TextField size="small" type="number" defaultValue={media} inputProps={{ min:0 }} sx={{ width: 80 }} id={`media-${depId}-${tipoId}-${subId}`} /></TableCell>
+                            <TableCell><TextField size="small" type="number" defaultValue={baja} inputProps={{ min:0 }} sx={{ width: 80 }} id={`baja-${depId}-${tipoId}-${subId}`} /></TableCell>
                             <TableCell align="right">
-                              <Button size="small" variant="contained" onClick={async () => {
+                              <Button size="small" variant="contained" sx={{ fontWeight: 600 }} onClick={async () => {
                                 const a = Number(document.getElementById(`alta-${depId}-${tipoId}-${subId}`)?.value) || null;
                                 const m = Number(document.getElementById(`media-${depId}-${tipoId}-${subId}`)?.value) || null;
                                 const b = Number(document.getElementById(`baja-${depId}-${tipoId}-${subId}`)?.value) || null;
@@ -348,7 +449,7 @@ export default function Sla() {
                 {/* Mobile: render cards */}
                 <Box sx={{ display: { xs: 'block', sm: 'none' }, mt: 1 }}>
                   {subcatRows.filter(row => !selectedDept || row.depId === selectedDept).length === 0 ? (
-                    <Typography variant="body2">No hay subcategorías {selectedDept ? 'para este departamento' : ''}</Typography>
+                    <Typography variant="body2" color="text.secondary">No hay subcategorías {selectedDept ? 'para este departamento' : ''}</Typography>
                   ) : subcatRows.filter(row => !selectedDept || row.depId === selectedDept).map(row => {
                     const { depId, tipoId, subId, nombre } = row;
                     const slaObj = (slaSubcats && slaSubcats[depId] && slaSubcats[depId][tipoId] && slaSubcats[depId][tipoId][subId]);
@@ -361,70 +462,76 @@ export default function Sla() {
                     const media = getVal('Media');
                     const baja = getVal('Baja');
                     return (
-                      <Paper key={`${depId}-${tipoId}-${subId}-card`} sx={{ p: 2, mb: 1 }} elevation={1}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{departamentos.find(d=>d.id===depId)?.nombre || depId} • {(tipos && tipos[depId] && tipos[depId][tipoId]) || tipoId}</Typography>
-                        <Typography variant="body2" sx={{ mb: 1 }}>{nombre}</Typography>
+                      <GlassCard key={`${depId}-${tipoId}-${subId}-card`} sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: theme.palette.primary.main }}>{departamentos.find(d=>d.id===depId)?.nombre || depId}</Typography>
+                        <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>{(tipos && tipos[depId] && tipos[depId][tipoId]) || tipoId} • {nombre}</Typography>
                         <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column' }}>
-                          <TextField size="small" type="number" defaultValue={alta} inputProps={{ min:0 }} sx={{ width: '100%' }} id={`alta-${depId}-${tipoId}-${subId}-mobile`} label={`Alta (h)`} />
-                          <TextField size="small" type="number" defaultValue={media} inputProps={{ min:0 }} sx={{ width: '100%' }} id={`media-${depId}-${tipoId}-${subId}-mobile`} label={`Media (h)`} />
-                          <TextField size="small" type="number" defaultValue={baja} inputProps={{ min:0 }} sx={{ width: '100%' }} id={`baja-${depId}-${tipoId}-${subId}-mobile`} label={`Baja (h)`} />
-                          <Button variant="contained" fullWidth sx={{ mt: 1 }} onClick={async () => {
+                          <TextField size="small" type="number" defaultValue={alta} inputProps={{ min:0 }} sx={{ width: '100%' }} id={`alta-${depId}-${tipoId}-${subId}-mobile`} label="Alta (h)" />
+                          <TextField size="small" type="number" defaultValue={media} inputProps={{ min:0 }} sx={{ width: '100%' }} id={`media-${depId}-${tipoId}-${subId}-mobile`} label="Media (h)" />
+                          <TextField size="small" type="number" defaultValue={baja} inputProps={{ min:0 }} sx={{ width: '100%' }} id={`baja-${depId}-${tipoId}-${subId}-mobile`} label="Baja (h)" />
+                          <Button variant="contained" fullWidth sx={{ mt: 1, fontWeight: 600 }} onClick={async () => {
                             const a = Number(document.getElementById(`alta-${depId}-${tipoId}-${subId}-mobile` )?.value) || null;
                             const m = Number(document.getElementById(`media-${depId}-${tipoId}-${subId}-mobile` )?.value) || null;
                             const b = Number(document.getElementById(`baja-${depId}-${tipoId}-${subId}-mobile` )?.value) || null;
                             await saveSubcatAll(depId, tipoId, subId, { Alta: a, Media: m, Baja: b });
                           }}>Guardar</Button>
                         </Box>
-                      </Paper>
+                      </GlassCard>
                     );
                   })}
                 </Box>
-              </Paper>
+              </SectionContainer>
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <Paper sx={{ p: { xs: 1, sm: 2 }, borderRadius: 2 }} elevation={3}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>Resumen y cumplimiento</Typography>
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
-                  <Button variant="contained" onClick={runScan} disabled={loading || scanning}>
-                    {scanning ? 'Escaneando...' : 'Escanear cumplimiento'}
+              <SectionContainer title="Escaneo de Cumplimiento" icon={CheckCircleIcon}>
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 3, flexWrap: 'wrap' }}>
+                  <Button 
+                    variant="contained" 
+                    onClick={runScan} 
+                    disabled={loading || scanning}
+                    startIcon={scanning ? <CircularProgress size={18} /> : <PlayArrowIcon />}
+                    sx={{ fontWeight: 700 }}
+                  >
+                    {scanning ? 'Escaneando...' : 'Escanear Cumplimiento'}
                   </Button>
-                  {scanResult.scanned && (
-                    <>
-                      <Chip label={`Total evaluables: ${scanResult.total}`} />
-                      <Chip label={`Dentro SLA: ${scanResult.within}`} color="success" />
-                      <Chip label={`Incumplidos: ${scanResult.breaches.length}`} color="error" />
-                    </>
-                  )}
                 </Box>
 
-                {scanResult.scanned && (
+                {scanResult.scanned && scanResult.breaches.length > 0 && (
                   <Box sx={{ mt: 2 }}>
-                    <Typography variant="body2">Incumplimientos (más recientes primero)</Typography>
-                    <TableContainer sx={{ overflowX: 'auto' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                      Incumplimientos ({scanResult.breaches.length})
+                    </Typography>
+                    <TableContainer sx={{ borderRadius: 2, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
                     <Table size="small">
                       <TableHead>
-                        <TableRow>
-                          <TableCell>Ticket</TableCell>
-                          <TableCell>Dept</TableCell>
-                          <TableCell>Prioridad</TableCell>
-                          <TableCell>Horas</TableCell>
-                          <TableCell>Objetivo (h)</TableCell>
-                          <TableCell>Estado</TableCell>
+                        <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.05) }}>
+                          <TableCell sx={{ fontWeight: 700 }}>Ticket</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Dept</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Horas</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Objetivo</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {scanResult.breaches.length === 0 && (
-                          <TableRow><TableCell colSpan={6}>Sin incumplimientos detectados</TableCell></TableRow>
-                        )}
                         {scanResult.breaches.map(b => (
-                          <TableRow key={b.ticket.id}>
-                            <TableCell>{b.ticket.tipo} #{b.ticket.id}</TableCell>
+                          <TableRow key={b.ticket.id} sx={{ '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.02) } }}>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>{b.ticket.tipo}</Typography>
+                              <Typography variant="caption" color="text.secondary">#{b.ticket.id}</Typography>
+                            </TableCell>
                             <TableCell>{departamentos.find(d => d.id === b.ticket.departamento)?.nombre || b.ticket.departamento}</TableCell>
-                            <TableCell>{b.ticket.prioridad || 'Media'}</TableCell>
-                            <TableCell>{Math.round(b.elapsed)}</TableCell>
-                            <TableCell>{b.slaHours}</TableCell>
-                            <TableCell>{b.closed ? 'Cerrado (incumplimiento)' : 'Abierto (en retraso)'}</TableCell>
+                            <TableCell>
+                              <Chip label={`${Math.round(b.elapsed)}h`} size="small" color="error" />
+                            </TableCell>
+                            <TableCell>{b.slaHours}h</TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={b.closed ? 'Cerrado' : 'Abierto'} 
+                                size="small" 
+                                color={b.closed ? 'default' : 'warning'}
+                              />
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -432,42 +539,66 @@ export default function Sla() {
                     </TableContainer>
                   </Box>
                 )}
-              </Paper>
+
+                {scanResult.scanned && scanResult.breaches.length === 0 && (
+                  <EmptyState 
+                    icon={CheckCircleIcon} 
+                    title="¡Excelente!" 
+                    subtitle="No hay incumplimientos de SLA"
+                  />
+                )}
+
+                {!scanResult.scanned && (
+                  <EmptyState 
+                    icon={PlayArrowIcon} 
+                    title="Ejecuta un escaneo" 
+                    subtitle="Presiona el botón para analizar el cumplimiento SLA"
+                  />
+                )}
+              </SectionContainer>
             </Grid>
           </Grid>
         </>
       )}
 
-      <Dialog open={editDialog.open} onClose={() => setEditDialog({ open: false, departamento: null, prioridad: 'Alta', value: '' })}>
-        <DialogTitle>Editar objetivo SLA</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+      <Dialog 
+        open={editDialog.open} 
+        onClose={() => setEditDialog({ open: false, departamento: null, prioridad: 'Alta', value: '' })}
+        PaperProps={{ sx: dialogStyles.paper }}
+      >
+        <DialogTitle sx={dialogStyles.title('purple')(theme)}>Editar objetivo SLA</DialogTitle>
+        <DialogContent sx={dialogStyles.content}>
+          <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
             <TextField select label="Prioridad" value={editDialog.prioridad} onChange={e => setEditDialog(d => ({ ...d, prioridad: e.target.value }))}>
               {PRIORITIES.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
             </TextField>
             <TextField label="Horas" value={editDialog.value} onChange={e => setEditDialog(d => ({ ...d, value: e.target.value }))} />
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialog({ open: false, departamento: null, prioridad: 'Alta', value: '' })} variant="contained" color="error">Cancelar</Button>
-          <Button variant="contained" onClick={saveConfig}>Guardar</Button>
+        <DialogActions sx={dialogStyles.actions}>
+          <Button onClick={() => setEditDialog({ open: false, departamento: null, prioridad: 'Alta', value: '' })} variant="contained" color="error" sx={{ fontWeight: 600 }}>Cancelar</Button>
+          <Button variant="contained" onClick={saveConfig} sx={{ fontWeight: 600 }}>Guardar</Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={subcatDialog.open} onClose={() => setSubcatDialog({ open: false, depId: null, tipoId: null, subId: null, prioridad: 'Alta', value: '' })}>
-        <DialogTitle>Editar SLA - Subcategoría</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+      <Dialog 
+        open={subcatDialog.open} 
+        onClose={() => setSubcatDialog({ open: false, depId: null, tipoId: null, subId: null, prioridad: 'Alta', value: '' })}
+        PaperProps={{ sx: dialogStyles.paper }}
+      >
+        <DialogTitle sx={dialogStyles.title('purple')(theme)}>Editar SLA - Subcategoría</DialogTitle>
+        <DialogContent sx={dialogStyles.content}>
+          <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
             <TextField select label="Prioridad" value={subcatDialog.prioridad} onChange={e => setSubcatDialog(d => ({ ...d, prioridad: e.target.value }))}>
               {PRIORITIES.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
             </TextField>
             <TextField label="Horas" value={subcatDialog.value} onChange={e => setSubcatDialog(d => ({ ...d, value: e.target.value }))} />
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSubcatDialog({ open: false, depId: null, tipoId: null, subId: null, prioridad: 'Alta', value: '' })} variant="contained" color="error">Cancelar</Button>
-          <Button variant="contained" onClick={saveSubcatSla}>Guardar</Button>
+        <DialogActions sx={dialogStyles.actions}>
+          <Button onClick={() => setSubcatDialog({ open: false, depId: null, tipoId: null, subId: null, prioridad: 'Alta', value: '' })} variant="contained" color="error" sx={{ fontWeight: 600 }}>Cancelar</Button>
+          <Button variant="contained" onClick={saveSubcatSla} sx={{ fontWeight: 600 }}>Guardar</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </ModuleContainer>
   );
 }

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import {
   Box,
@@ -10,16 +9,17 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert,
   MenuItem,
-  Paper,
-  CircularProgress,
+  alpha,
+  useTheme,
+  Fade,
+  Tooltip,
 } from '@mui/material';
 import Avatar from '@mui/material/Avatar';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import RefreshIcon from '@mui/icons-material/Refresh';
+import PeopleIcon from '@mui/icons-material/People';
 import { DataGrid } from '@mui/x-data-grid';
 import { ref as dbRef, get, set, remove, update, push } from 'firebase/database';
 import { storage } from '../firebase/firebaseConfig';
@@ -28,6 +28,14 @@ import { useAuth } from '../context/useAuth';
 import { useDb } from '../context/DbContext';
 import useNotification from '../context/useNotification';
 import { getDbForRecinto } from '../firebase/multiDb';
+import { 
+  PageHeader, 
+  GlassCard, 
+  ModuleContainer, 
+  tableStyles, 
+  dialogStyles,
+  gradients 
+} from '../components/ui/SharedStyles';
 
 export default function Usuarios() {
   const { userData } = useAuth();
@@ -210,93 +218,83 @@ export default function Usuarios() {
     });
   }, [usuarios, query]);
 
+  const theme = useTheme();
+
   return (
-    <Box
-      sx={{
-        p: { xs: 1, sm: 2 },
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        minWidth: 0,
-        minHeight: '90vh',
-        width: { xs: '100%', md: '80vw' },
-        maxWidth: '100vw',
-        margin: '0 auto',
-        boxSizing: 'border-box',
-      }}
-    >
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
-        Usuarios
-      </Typography>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-      <Paper elevation={1} sx={{ p: 2, borderRadius: 3, boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)', mb: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-            <TextField
-              size="small"
-              placeholder="Buscar por nombre o apellido"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              sx={{ minWidth: 240 }}
-            />
-          </Box>
-          {userData?.rol === 'admin' && (
-            <>
-              <Button
-                variant="outlined"
-                startIcon={loading ? <CircularProgress size={18} /> : <RefreshIcon />}
-                onClick={handleRefresh}
-                sx={{ borderRadius: 2, fontWeight: 500 }}
-              >
-                Refrescar
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => handleOpenDialog()}
-                sx={{ borderRadius: 2, fontWeight: 500, bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined, '& .MuiSvgIcon-root': { color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : 'inherit' } }}
-              >
-                Agregar
-              </Button>
-            </>
-          )}
+    <ModuleContainer maxWidth="100vw">
+      <PageHeader
+        title="Usuarios"
+        subtitle={`${usuarios.length} usuarios registrados`}
+        icon={PeopleIcon}
+        gradient="info"
+        onRefresh={handleRefresh}
+        action={
+          userData?.rol === 'admin' && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpenDialog()}
+              sx={{
+                bgcolor: alpha('#fff', 0.2),
+                color: '#fff',
+                fontWeight: 700,
+                '&:hover': { bgcolor: alpha('#fff', 0.3) },
+              }}
+            >
+              Agregar
+            </Button>
+          )
+        }
+      />
+
+      <GlassCard>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+          <TextField
+            size="small"
+            placeholder="Buscar por nombre o apellido..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            sx={{ 
+              minWidth: { xs: '100%', sm: 300 },
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+              }
+            }}
+          />
         </Box>
+        
+        <Box sx={tableStyles.container(theme)}>
           <DataGrid
-          rows={filteredUsuarios}
-          columns={columns}
-          pageSize={10}
-          rowsPerPageOptions={[5, 10, 20]}
-          disableSelectionOnClick
-          getRowId={(row) => row.id}
-          localeText={{ noRowsLabel: 'No hay usuarios' }}
-          sx={{
-            backgroundColor: 'background.paper',
-            borderRadius: 2,
-            boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)',
-            '& .MuiDataGrid-columnHeaders': {
-              background: theme => theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(90deg, #e3e6ec 0%, #f5f6fa 100%)',
-              color: theme => theme.palette.text.primary,
-              fontWeight: 700,
-              fontSize: '1.05rem',
-              letterSpacing: 0.5,
-              borderTopLeftRadius: 8,
-              borderTopRightRadius: 8,
-              textShadow: 'none',
-            },
-            '& .MuiDataGrid-row:hover': {
-              backgroundColor: theme => theme.palette.action.hover,
-            },
-            '& .MuiDataGrid-cell': {
-              fontSize: { xs: '0.95rem', sm: '1rem' },
-            },
-            minHeight: 400,
-          }}
-        />
-      </Paper>
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="xs">
-        <DialogTitle>{editId ? 'Editar Usuario' : 'Agregar Usuario'}</DialogTitle>
-        <DialogContent>
+            rows={filteredUsuarios}
+            columns={columns}
+            pageSize={10}
+            rowsPerPageOptions={[5, 10, 20]}
+            disableSelectionOnClick
+            getRowId={(row) => row.id}
+            loading={loading}
+            localeText={{ noRowsLabel: 'No hay usuarios registrados' }}
+            sx={{
+              border: 'none',
+              minHeight: 400,
+              '& .MuiDataGrid-cell': {
+                fontSize: { xs: '0.9rem', sm: '0.95rem' },
+              },
+            }}
+          />
+        </Box>
+      </GlassCard>
+
+      <Dialog 
+        open={openDialog} 
+        onClose={() => setOpenDialog(false)} 
+        fullWidth 
+        maxWidth="xs"
+        PaperProps={{ sx: dialogStyles.paper }}
+      >
+        <DialogTitle sx={dialogStyles.title('info')(theme)}>
+          {editId ? 'Editar Usuario' : 'Nuevo Usuario'}
+        </DialogTitle>
+        <DialogContent sx={dialogStyles.content}>
           <TextField
             autoFocus
             margin="dense"
@@ -364,11 +362,15 @@ export default function Usuarios() {
             <MenuItem value="admin">Admin</MenuItem>
           </TextField>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error">Cancelar</Button>
-          <Button onClick={handleSave} variant="contained">Guardar</Button>
+        <DialogActions sx={dialogStyles.actions}>
+          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error" sx={{ fontWeight: 600 }}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} variant="contained" sx={{ fontWeight: 600 }}>
+            Guardar
+          </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </ModuleContainer>
   );
 }

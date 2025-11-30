@@ -1,16 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Paper, TextField, Button, Chip, MenuItem, Alert } from '@mui/material';
+import { Box, Typography, TextField, Button, Chip, MenuItem } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
+import EmailIcon from '@mui/icons-material/Email';
+import AddIcon from '@mui/icons-material/Add';
+import SaveIcon from '@mui/icons-material/Save';
 import { ref, get, set } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
+import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState, gradients } from '../components/ui/SharedStyles';
+import useNotification from '../context/useNotification';
 
 export default function ConfigCorreo() {
   const { db: ctxDb, recinto } = useDb();
+  const theme = useTheme();
+  const { notify } = useNotification();
   const [departamentos, setDepartamentos] = useState([]);
   const [selectedDep, setSelectedDep] = useState('');
   const [pool, setPool] = useState([]);
   const [input, setInput] = useState('');
-  const [msg, setMsg] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -54,18 +61,22 @@ export default function ConfigCorreo() {
 
   const save = async () => {
     if (!selectedDep) return;
-  const dbInstance = ctxDb || (recinto ? await getDbForRecinto(recinto) : null);
-  if (!dbInstance) return;
-  await set(ref(dbInstance, `configCorreo/departamentos/${selectedDep}/pool`), pool);
-    setMsg('Pool actualizado');
-    setTimeout(() => setMsg(''), 2000);
+    const dbInstance = ctxDb || (recinto ? await getDbForRecinto(recinto) : null);
+    if (!dbInstance) return;
+    await set(ref(dbInstance, `configCorreo/departamentos/${selectedDep}/pool`), pool);
+    notify('Pool de correos actualizado', 'success');
   };
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2 } }}>
-      <Typography variant="h5" sx={{ mb: 2 }}>Configuración de Correo</Typography>
-      {msg && <Alert severity="success" sx={{ mb: 2 }}>{msg}</Alert>}
-      <Paper sx={{ p: 2, mb: 2 }}>
+    <ModuleContainer>
+      <PageHeader 
+        title="Configuración de Correo" 
+        subtitle="Administra el pool de correos por departamento"
+        icon={<EmailIcon />}
+        gradient={gradients.info}
+      />
+      
+      <GlassCard sx={{ p: 3, mb: 3 }}>
         <TextField
           select
           label="Departamento"
@@ -77,28 +88,66 @@ export default function ConfigCorreo() {
             <MenuItem key={dep.id} value={dep.id}>{dep.nombre}</MenuItem>
           ))}
         </TextField>
-      </Paper>
+      </GlassCard>
+      
       {selectedDep && (
-        <Paper sx={{ p: 2 }}>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>Pool de correos</Typography>
-          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+        <SectionContainer title="Pool de correos" icon={<EmailIcon />}>
+          <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
             <TextField
-              fullWidth
+              sx={{ flex: 1, minWidth: 250 }}
               size="small"
               label="Agregar correo"
               value={input}
               onChange={e => setInput(e.target.value)}
+              onKeyPress={e => e.key === 'Enter' && addEmail()}
             />
-            <Button variant="contained" onClick={addEmail} sx={{ '&.MuiButton-contained': { backgroundColor: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: (theme) => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined } }}>Agregar</Button>
+            <Button 
+              variant="contained" 
+              onClick={addEmail}
+              startIcon={<AddIcon />}
+              sx={{ 
+                background: gradients.success,
+                '&:hover': { opacity: 0.9 }
+              }}
+            >
+              Agregar
+            </Button>
           </Box>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-            {pool.map(email => (
-              <Chip key={email} label={email} onDelete={() => removeEmail(email)} sx={{ background: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: (theme) => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined }} />
-            ))}
-          </Box>
-          <Button variant="contained" onClick={save} sx={{ '&.MuiButton-contained': { backgroundColor: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: (theme) => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined } }}>Guardar</Button>
-        </Paper>
+          
+          {pool.length === 0 ? (
+            <EmptyState message="No hay correos en el pool" icon={<EmailIcon />} />
+          ) : (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
+              {pool.map(email => (
+                <Chip 
+                  key={email} 
+                  label={email} 
+                  onDelete={() => removeEmail(email)} 
+                  sx={{ 
+                    background: gradients.primary, 
+                    color: '#fff',
+                    fontWeight: 500,
+                    '& .MuiChip-deleteIcon': { color: 'rgba(255,255,255,0.7)' }
+                  }} 
+                />
+              ))}
+            </Box>
+          )}
+          
+          <Button 
+            variant="contained" 
+            onClick={save}
+            startIcon={<SaveIcon />}
+            sx={{ 
+              background: gradients.primary,
+              px: 4,
+              '&:hover': { opacity: 0.9 }
+            }}
+          >
+            Guardar
+          </Button>
+        </SectionContainer>
       )}
-    </Box>
+    </ModuleContainer>
   );
 }

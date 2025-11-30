@@ -9,7 +9,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Alert,
   Table,
   TableBody,
   TableCell,
@@ -19,15 +18,20 @@ import {
   Paper,
   Chip,
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
+import CategoryIcon from '@mui/icons-material/Category';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { ref, get, push, set, remove } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
+import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState, gradients, dialogStyles } from '../components/ui/SharedStyles';
+import useNotification from '../context/useNotification';
 
 export default function ConfigSubcategorias() {
   const { db: ctxDb, recinto } = useDb();
+  const theme = useTheme();
+  const { notify } = useNotification();
   const [departamentos, setDepartamentos] = useState([]);
   const [tipos, setTipos] = useState({});
   const [subcats, setSubcats] = useState({});
@@ -41,6 +45,12 @@ export default function ConfigSubcategorias() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [search, setSearch] = useState('');
+
+  // Mostrar notificaciones
+  useEffect(() => {
+    if (success) notify(success, 'success');
+    if (error) notify(error, 'error');
+  }, [success, error, notify]);
 
   // Carga inicial
   useEffect(() => {
@@ -138,66 +148,97 @@ export default function ConfigSubcategorias() {
   };
 
   return (
-    <Box sx={{ p: 2, width: '100%', height: '100%' }}>
-      <Typography variant="h5" sx={{ mb: 2 }}>
-        Configuración de Subcategorías
-      </Typography>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-      {/* Campo de búsqueda */}
-      <TextField
-        label="Buscar tipo o departamento"
-        variant="outlined"
-        size="small"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        sx={{ mb: 2, width: '100%', maxWidth: 400 }}
+    <ModuleContainer>
+      <PageHeader 
+        title="Subcategorías" 
+        subtitle="Configura las subcategorías para cada tipo de ticket por departamento"
+        icon={<CategoryIcon />}
+        gradient={gradients.teal}
       />
+      
+      {/* Campo de búsqueda */}
+      <GlassCard sx={{ p: 2, mb: 3 }}>
+        <TextField
+          label="Buscar tipo o departamento"
+          variant="outlined"
+          size="small"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          fullWidth
+          sx={{ maxWidth: 400 }}
+        />
+      </GlassCard>
 
-      <TableContainer component={Paper} elevation={1}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Departamento</TableCell>
-              <TableCell>Categoría</TableCell>
-              <TableCell>Subcategorías</TableCell>
-              <TableCell>Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filasFiltradas.map(row => (
-              <TableRow key={`${row.depId}-${row.tipoId}`}> 
-                <TableCell>{row.departamento}</TableCell>
-                <TableCell>{row.tipoNombre}</TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {row.subs.map(sub => (
-                      <Chip
-                          key={sub.id}
-                          label={sub.nombre}
-                          onDelete={() => handleDelete(row.depId, row.tipoId, sub.id)}
-                          deleteIcon={<DeleteIcon fontSize="small" />}
-                          onClick={() => handleOpen(row.depId, row.tipoId, sub)}
-                          sx={{ background: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : '#1976d2', color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : '#fff' }}
-                        />
-                    ))}
-                    <IconButton size="small" onClick={() => handleOpen(row.depId, row.tipoId)} sx={{ '& .MuiSvgIcon-root': { color: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
-                      <AddIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  {/* Opcional acciones extra */}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <SectionContainer title="Subcategorías por Categoría" icon={<CategoryIcon />}>
+        {filasFiltradas.length === 0 ? (
+          <EmptyState message="No hay categorías configuradas" icon={<CategoryIcon />} />
+        ) : (
+          <TableContainer component={Paper} elevation={0} sx={{ bgcolor: 'transparent' }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.08) }}>
+                  <TableCell sx={{ fontWeight: 700 }}>Departamento</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Categoría</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Subcategorías</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Acciones</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filasFiltradas.map(row => (
+                  <TableRow 
+                    key={`${row.depId}-${row.tipoId}`}
+                    sx={{ 
+                      '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.04) },
+                      transition: 'background-color 0.2s'
+                    }}
+                  > 
+                    <TableCell>{row.departamento}</TableCell>
+                    <TableCell>
+                      <Chip label={row.tipoNombre} size="small" sx={{ fontWeight: 600 }} />
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {row.subs.map(sub => (
+                          <Chip
+                            key={sub.id}
+                            label={sub.nombre}
+                            onDelete={() => handleDelete(row.depId, row.tipoId, sub.id)}
+                            deleteIcon={<DeleteIcon fontSize="small" />}
+                            onClick={() => handleOpen(row.depId, row.tipoId, sub)}
+                            sx={{ 
+                              background: gradients.primary, 
+                              color: '#fff',
+                              fontWeight: 500,
+                              '&:hover': { opacity: 0.9 }
+                            }}
+                          />
+                        ))}
+                        <IconButton 
+                          size="small" 
+                          onClick={() => handleOpen(row.depId, row.tipoId)}
+                          sx={{ 
+                            bgcolor: alpha(theme.palette.success.main, 0.1),
+                            '&:hover': { bgcolor: alpha(theme.palette.success.main, 0.2) }
+                          }}
+                        >
+                          <AddIcon fontSize="small" color="success" />
+                        </IconButton>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      {/* Opcional acciones extra */}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </SectionContainer>
 
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="xs">
-        <DialogTitle>{editSub ? 'Editar Subcategoría' : 'Agregar Subcategoría'}</DialogTitle>
-        <DialogContent>
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="xs" PaperProps={{ sx: dialogStyles.paper }}>
+        <DialogTitle sx={dialogStyles.title}>{editSub ? 'Editar Subcategoría' : 'Agregar Subcategoría'}</DialogTitle>
+        <DialogContent sx={dialogStyles.content}>
           <TextField
             autoFocus
             margin="dense"
@@ -216,11 +257,11 @@ export default function ConfigSubcategorias() {
             helperText="Si se deja vacío se usará el SLA por departamento o el por defecto"
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error">Cancelar</Button>
-          <Button variant="contained" onClick={handleSave}>Guardar</Button>
+        <DialogActions sx={dialogStyles.actions}>
+          <Button onClick={() => setOpenDialog(false)} variant="outlined" color="inherit">Cancelar</Button>
+          <Button variant="contained" onClick={handleSave} sx={{ background: gradients.primary }}>Guardar</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </ModuleContainer>
   );
 }

@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Paper, Typography, TextField, Button, MenuItem, Alert, Avatar, Chip, CircularProgress, Badge, IconButton, LinearProgress, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import PhotoCamera from '@mui/icons-material/PhotoCamera';
+import PersonIcon from '@mui/icons-material/Person';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import { ref, get, update } from 'firebase/database';
 import { updatePassword, updateProfile } from 'firebase/auth';
 import { useAuth } from '../context/useAuth';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
 import { auth } from '../firebase/firebaseConfig';
+import { ModuleContainer, PageHeader, GlassCard, StatCard, gradients, dialogStyles } from '../components/ui/SharedStyles';
+import useNotification from '../context/useNotification';
 
 export default function Perfil() {
   const { user, userData, logout } = useAuth();
   const { db: ctxDb, recinto } = useDb();
+  const theme = useTheme();
+  const { notify } = useNotification();
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [departamento, setDepartamento] = useState('');
@@ -30,6 +39,12 @@ export default function Perfil() {
   const [ticketsCreados, setTicketsCreados] = useState(0);
   const [ticketsCerrados, setTicketsCerrados] = useState(0);
   const [ultimosTickets, setUltimosTickets] = useState([]);
+
+  // Mostrar notificaciones
+  useEffect(() => {
+    if (success) notify(success, 'success');
+    if (error) notify(error, 'error');
+  }, [success, error, notify]);
 
   useEffect(() => {
     if (userData) {
@@ -332,15 +347,14 @@ export default function Perfil() {
         fullWidth
         maxWidth="xs"
         hideBackdrop={false}
+        PaperProps={{ sx: dialogStyles.paper }}
       >
-        <DialogTitle>Selecciona tu departamento</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ mb: 1 }}>Para continuar, selecciona el departamento al que perteneces.</Typography>
+        <DialogTitle sx={dialogStyles.title}>Selecciona tu departamento</DialogTitle>
+        <DialogContent sx={dialogStyles.content}>
+          <Typography sx={{ mb: 2, color: 'text.secondary' }}>Para continuar, selecciona el departamento al que perteneces.</Typography>
           <TextField select fullWidth label="Departamento" value={selectedDeptForDialog} onChange={e => {
             const val = e.target.value;
             setSelectedDeptForDialog(val);
-            // Nota: no guardamos inmediatamente al seleccionar para que el usuario
-            // pueda confirmar explícitamente con el botón "Confirmar".
           }}>
             {departamentos.length === 0 ? (
               <MenuItem value="" disabled>No hay departamentos</MenuItem>
@@ -351,101 +365,168 @@ export default function Perfil() {
             )}
           </TextField>
         </DialogContent>
-        <DialogActions>
-          {/* Forzamos que sólo exista la opción Confirmar; el diálogo es obligatorio */}
-          <Button disabled={!selectedDeptForDialog} onClick={handleConfirmDept} variant="contained">Confirmar</Button>
+        <DialogActions sx={dialogStyles.actions}>
+          <Button disabled={!selectedDeptForDialog} onClick={handleConfirmDept} variant="contained" sx={{ fontWeight: 600 }}>Confirmar</Button>
         </DialogActions>
       </Dialog>
-    <Box sx={{ minHeight: '90vh', width: '100%', background: theme => theme.palette.background.default, p: { xs: 1, sm: 3 } }}>
+      
+    <ModuleContainer>
+      <PageHeader 
+        title="Mi Perfil" 
+        subtitle="Administra tu información personal y configuración"
+        icon={<PersonIcon />}
+        gradient={gradients.info}
+      />
+      
+      {/* Stats Cards */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2, mb: 3 }}>
+        <StatCard
+          title="Tickets Creados"
+          value={ticketsCreados}
+          icon={<AssignmentIcon />}
+          gradient={gradients.primary}
+        />
+        <StatCard
+          title="Tickets Cerrados"
+          value={ticketsCerrados}
+          icon={<CheckCircleIcon />}
+          gradient={gradients.success}
+        />
+        <StatCard
+          title="Miembro desde"
+          value={fechaRegistro || '-'}
+          icon={<CalendarTodayIcon />}
+          gradient={gradients.info}
+          isText
+        />
+      </Box>
+
       <Box sx={{
         display: 'grid',
         gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
         gap: 3,
-        justifyContent: 'center',
         alignItems: 'flex-start',
-        maxWidth: 1100,
-        mx: 'auto',
       }}>
-        {/* Columna 1: Info personal, actividad y acciones */}
+        {/* Columna 1: Info personal y actividad */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* Tarjeta de información personal */}
-          <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'background.paper' }}>
+          <GlassCard sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <Badge
               overlap="circular"
               anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
               badgeContent={
-                <IconButton size="small" color="primary" component="label" sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
+                <IconButton size="small" color="primary" component="label" sx={{ 
+                  bgcolor: alpha(theme.palette.primary.main, 0.1),
+                  '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) }
+                }}>
                   <PhotoCamera fontSize="small" />
                   <input hidden accept="image/*" type="file" onChange={handleAvatarChange} />
                 </IconButton>
               }
             >
-              <Avatar src={user?.photoURL || ''} sx={{ width: 110, height: 110, mb: 2, border: theme => `4px solid ${theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.primary.main}`, boxShadow: 1 }} />
+              <Avatar 
+                src={user?.photoURL || ''} 
+                sx={{ 
+                  width: 120, 
+                  height: 120, 
+                  mb: 2, 
+                  border: `4px solid ${theme.palette.primary.main}`,
+                  boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.3)}`
+                }} 
+              />
             </Badge>
             <Typography variant="h5" fontWeight={700}>{nombre} {apellido}</Typography>
-            <Typography color="text.secondary">{user?.email}</Typography>
-            <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-              <Chip label={userData?.rol || 'Sin rol'} sx={{ background: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined }} />
-              <Chip label={departamento || 'Sin departamento'} sx={{ background: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined }} />
+            <Typography color="text.secondary" sx={{ mb: 1 }}>{user?.email}</Typography>
+            <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Chip 
+                label={userData?.rol || 'Sin rol'} 
+                sx={{ 
+                  background: gradients.primary,
+                  color: '#fff',
+                  fontWeight: 600
+                }} 
+              />
+              <Chip 
+                label={departamento || 'Sin departamento'} 
+                sx={{ 
+                  background: gradients.secondary,
+                  color: '#fff',
+                  fontWeight: 600
+                }} 
+              />
             </Box>
-            <LinearProgress variant="determinate" value={perfilCompleto} sx={{ width: '80%', mt: 2, mb: 1, borderRadius: 2 }} />
-            <Typography variant="caption" color="text.secondary">Perfil {perfilCompleto}% completo</Typography>
-          </Paper>
-          {/* Tarjeta de actividad mejorada */}
-          <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 1, background: 'background.paper' }}>
-            <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2, color: 'text.primary', letterSpacing: 1 }}>Actividad reciente</Typography>
-            <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ flex: 1, minWidth: 120, background: theme => theme.palette.mode === 'dark' ? theme.palette.background.default : '#f7f7f7', borderRadius: 2, p: 2, boxShadow: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Avatar sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.primary.main, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined, width: 32, height: 32, fontSize: 18 }}>C</Avatar>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Creados</Typography>
-                  <Typography variant="h6" fontWeight={700} sx={{ color: 'text.primary' }}>{ticketsCreados}</Typography>
-                </Box>
+            <Box sx={{ width: '100%', mt: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="body2" color="text.secondary">Perfil completo</Typography>
+                <Typography variant="body2" fontWeight={600}>{perfilCompleto}%</Typography>
               </Box>
-              <Box sx={{ flex: 1, minWidth: 120, background: theme => theme.palette.mode === 'dark' ? theme.palette.background.default : '#f7f7f7', borderRadius: 2, p: 2, boxShadow: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Avatar sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.success.main, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined, width: 32, height: 32, fontSize: 18 }}>✓</Avatar>
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Cerrados</Typography>
-                  <Typography variant="h6" fontWeight={700} sx={{ color: 'text.primary' }}>{ticketsCerrados}</Typography>
-                </Box>
-              </Box>
+              <LinearProgress 
+                variant="determinate" 
+                value={perfilCompleto} 
+                sx={{ 
+                  height: 8, 
+                  borderRadius: 4,
+                  bgcolor: alpha(theme.palette.primary.main, 0.1),
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 4,
+                    background: gradients.primary
+                  }
+                }} 
+              />
             </Box>
-            <Typography variant="body2" fontWeight={600} sx={{ mt: 2, mb: 1, color: 'text.primary' }}>Últimos tickets</Typography>
-      <List dense sx={{ bgcolor: 'transparent' }}>
+          </GlassCard>
+          
+          {/* Tarjeta de actividad */}
+          <GlassCard sx={{ p: 3 }}>
+            <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Últimos Tickets</Typography>
+            <List dense sx={{ bgcolor: 'transparent' }}>
               {ultimosTickets.length === 0 && (
-                <ListItem>
-                  <ListItemText primary={<Typography color="text.secondary">No hay tickets recientes</Typography>} />
+                <ListItem sx={{ py: 3, justifyContent: 'center' }}>
+                  <Typography color="text.secondary">No hay tickets recientes</Typography>
                 </ListItem>
               )}
               {ultimosTickets.map(t => (
-    <ListItem key={t.id} sx={{ mb: 1, borderRadius: 2, background: theme => theme.palette.mode === 'dark' ? theme.palette.background.paper : '#f7f7f7', boxShadow: 0, border: theme => `1px solid ${theme.palette.divider}`, alignItems: 'flex-start' }}>
+                <ListItem 
+                  key={t.id} 
+                  sx={{ 
+                    mb: 1, 
+                    borderRadius: 2, 
+                    bgcolor: alpha(theme.palette.background.paper, 0.5),
+                    border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.05) }
+                  }}
+                >
                   <ListItemText
-              primary={<Typography fontWeight={600} fontSize={15} sx={{ color: 'text.primary' }}>{t.descripcion}</Typography>}
-                        secondary={
-                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
-                <Chip component="span" size="small" label={t.estado} sx={{ fontWeight: 600, background: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined }} />
-                            <Typography variant="caption" color="text.secondary" component="span">
-                              {t.fecha ? new Date(t.fecha).toLocaleDateString() : ''}
-                            </Typography>
-                          </Box>
-                        }
-                        secondaryTypographyProps={{ component: 'div' }}
-                      />
+                    primary={<Typography fontWeight={600} noWrap>{t.descripcion}</Typography>}
+                    secondary={
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
+                        <Chip 
+                          size="small" 
+                          label={t.estado} 
+                          color={t.estado === 'Cerrado' ? 'success' : t.estado === 'En Proceso' ? 'info' : 'warning'}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          {t.fecha ? new Date(t.fecha).toLocaleDateString() : ''}
+                        </Typography>
+                      </Box>
+                    }
+                    secondaryTypographyProps={{ component: 'div' }}
+                  />
                 </ListItem>
               ))}
             </List>
-          </Paper>
+          </GlassCard>
+          
           {/* Tarjeta de acciones */}
-          <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 1, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center', background: 'background.paper' }}>
+          <GlassCard sx={{ p: 3, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
             <Button
               variant="contained"
               onClick={() => setPassword('')}
               sx={{
-                backgroundColor: '#FFC107', // amarillo corporativo
-                color: theme => theme.palette.getContrastText('#FFC107'),
-                '&:hover': { backgroundColor: '#FFB300' },
-                boxShadow: 1,
-                textTransform: 'none'
+                background: gradients.warning,
+                color: '#fff',
+                fontWeight: 600,
+                '&:hover': { opacity: 0.9 }
               }}
             >
               Cambiar contraseña
@@ -454,48 +535,65 @@ export default function Perfil() {
               variant="contained"
               onClick={handleDeleteAccount}
               sx={{
-                backgroundColor: '#D32F2F', // rojo fuerte
-                color: '#ffffff',
-                '&:hover': { backgroundColor: '#C62828' },
-                boxShadow: 1,
-                textTransform: 'none'
+                background: gradients.error,
+                color: '#fff',
+                fontWeight: 600,
+                '&:hover': { opacity: 0.9 }
               }}
             >
               Eliminar cuenta
             </Button>
-            <Button variant="contained" color="secondary" onClick={logout} sx={{ bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined }}>Cerrar sesión</Button>
-          </Paper>
+            <Button 
+              variant="outlined" 
+              color="secondary" 
+              onClick={logout}
+              sx={{ fontWeight: 600 }}
+            >
+              Cerrar sesión
+            </Button>
+          </GlassCard>
         </Box>
+        
         {/* Columna 2: Edición de datos */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {/* Tarjeta de edición de datos */}
-          <Paper sx={{ p: 3, borderRadius: 4, boxShadow: 1 }}>
-            <Box component="form" onSubmit={handleUpdate}>
-              <TextField label="Nombre" fullWidth margin="normal" value={nombre} onChange={e => setNombre(e.target.value)} required />
-              <TextField label="Apellido" fullWidth margin="normal" value={apellido} onChange={e => setApellido(e.target.value)} required />
-              <TextField label="Teléfono" fullWidth margin="normal" value={telefono} onChange={e => setTelefono(e.target.value)} />
-              <TextField label="Puesto" fullWidth margin="normal" value={puesto} onChange={e => setPuesto(e.target.value)} />
-              <TextField select fullWidth margin="normal" label="Departamento" value={departamento} onChange={e => setDepartamento(e.target.value)} required>
-                {departamentos.length === 0 ? (
-                  <MenuItem value="" disabled>No hay departamentos</MenuItem>
-                ) : (
-                  departamentos.map((dep, idx) => (
-                    <MenuItem key={idx} value={dep}>{dep}</MenuItem>
-                  ))
-                )}
-              </TextField>
-              <TextField label="Nueva contraseña" fullWidth margin="normal" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
-              <TextField label="Fecha de registro" fullWidth margin="normal" value={fechaRegistro} InputProps={{ readOnly: true }} />
-              <Button fullWidth variant="contained" color="primary" sx={{ mt: 2, fontWeight: 700, fontSize: 16, borderRadius: 2, py: 1.2, textTransform: 'none' }} type="submit" disabled={loading} startIcon={loading && <CircularProgress size={20} color="inherit" />}>
-                Guardar cambios
-              </Button>
-            </Box>
-            {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
-            {success && <Alert severity="success" sx={{ mt: 2 }}>{success}</Alert>}
-          </Paper>
-        </Box>
+        <GlassCard sx={{ p: 3 }}>
+          <Typography variant="h6" fontWeight={700} sx={{ mb: 3 }}>Editar Información</Typography>
+          <Box component="form" onSubmit={handleUpdate}>
+            <TextField label="Nombre" fullWidth margin="normal" value={nombre} onChange={e => setNombre(e.target.value)} required />
+            <TextField label="Apellido" fullWidth margin="normal" value={apellido} onChange={e => setApellido(e.target.value)} required />
+            <TextField label="Teléfono" fullWidth margin="normal" value={telefono} onChange={e => setTelefono(e.target.value)} />
+            <TextField label="Puesto" fullWidth margin="normal" value={puesto} onChange={e => setPuesto(e.target.value)} />
+            <TextField select fullWidth margin="normal" label="Departamento" value={departamento} onChange={e => setDepartamento(e.target.value)} required>
+              {departamentos.length === 0 ? (
+                <MenuItem value="" disabled>No hay departamentos</MenuItem>
+              ) : (
+                departamentos.map((dep, idx) => (
+                  <MenuItem key={idx} value={dep}>{dep}</MenuItem>
+                ))
+              )}
+            </TextField>
+            <TextField label="Nueva contraseña" fullWidth margin="normal" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
+            <TextField label="Fecha de registro" fullWidth margin="normal" value={fechaRegistro} InputProps={{ readOnly: true }} />
+            <Button 
+              fullWidth 
+              variant="contained" 
+              sx={{ 
+                mt: 3, 
+                py: 1.5, 
+                fontWeight: 700, 
+                fontSize: 16, 
+                background: gradients.primary,
+                '&:hover': { opacity: 0.9 }
+              }} 
+              type="submit" 
+              disabled={loading} 
+              startIcon={loading && <CircularProgress size={20} color="inherit" />}
+            >
+              Guardar cambios
+            </Button>
+          </Box>
+        </GlassCard>
       </Box>
-    </Box>
+    </ModuleContainer>
     </>
   );
 }

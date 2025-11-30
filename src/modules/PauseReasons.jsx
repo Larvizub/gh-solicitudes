@@ -1,20 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, Paper, TextField, Button, MenuItem, List, ListItem, ListItemText, Divider, Alert } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { Box, Typography, TextField, Button, MenuItem, List, ListItem, ListItemText, ListItemSecondaryAction, Divider, IconButton } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
+import PauseCircleIcon from '@mui/icons-material/PauseCircle';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
 import { ref as dbRef, get, push, remove } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
+import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState, gradients } from '../components/ui/SharedStyles';
+import useNotification from '../context/useNotification';
 
 export default function PauseReasons() {
   const { db: ctxDb, recinto } = useDb();
   const theme = useTheme();
+  const { notify } = useNotification();
   const [departamentos, setDepartamentos] = useState([]);
   const [selectedDep, setSelectedDep] = useState('');
   const [reasons, setReasons] = useState([]);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [error, setError] = useState('');
-  // loading state not required in this simple UI
+
+  // Mostrar notificaciones
+  useEffect(() => {
+    if (error) notify(error, 'error');
+  }, [error, notify]);
 
   useEffect(() => {
     let mounted = true;
@@ -69,6 +79,7 @@ export default function PauseReasons() {
       const dbInstance = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
       await push(dbRef(dbInstance, `pauseReasons/${selectedDep}`), { nombre: newName.trim(), descripcion: newDesc.trim() });
       setNewName(''); setNewDesc('');
+      notify('Motivo agregado correctamente', 'success');
       // reload
       const snap = await get(dbRef(dbInstance, `pauseReasons/${selectedDep}`));
       if (snap.exists()) setReasons(Object.entries(snap.val()).map(([id, v]) => ({ id, ...v })));
@@ -83,6 +94,7 @@ export default function PauseReasons() {
       const dbInstance = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
       await remove(dbRef(dbInstance, `pauseReasons/${selectedDep}/${id}`));
       setReasons(r => r.filter(x => x.id !== id));
+      notify('Motivo eliminado', 'success');
     } catch (e) {
       console.error('Error eliminando motivo', e);
       setError('Error al eliminar motivo');
@@ -90,55 +102,94 @@ export default function PauseReasons() {
   };
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 3 } }}>
-      <Typography variant="h5" sx={{ mb: 2 }}>Motivos de Pausa por Departamento</Typography>
-      <Paper sx={{ p: 2 }}>
-        {error && <Alert severity="error">{error}</Alert>}
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-          <TextField select label="Departamento" value={selectedDep} onChange={e => setSelectedDep(e.target.value)}>
+    <ModuleContainer>
+      <PageHeader 
+        title="Motivos de Pausa" 
+        subtitle="Configura los motivos de pausa disponibles por departamento"
+        icon={<PauseCircleIcon />}
+        gradient={gradients.orange}
+      />
+      
+      <GlassCard sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TextField 
+            select 
+            label="Departamento" 
+            value={selectedDep} 
+            onChange={e => setSelectedDep(e.target.value)}
+            sx={{ minWidth: 200 }}
+          >
             {departamentos.map(d => <MenuItem key={d.id} value={d.id}>{d.nombre}</MenuItem>)}
           </TextField>
         </Box>
-        <Divider sx={{ mb: 2 }} />
-        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-          <TextField label="Nombre" value={newName} onChange={e => setNewName(e.target.value)} />
-          <TextField label="Descripción" value={newDesc} onChange={e => setNewDesc(e.target.value)} />
-          <Button variant="contained" onClick={handleAdd}>Agregar</Button>
+      </GlassCard>
+      
+      <SectionContainer title="Agregar Nuevo Motivo" icon={<AddIcon />}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <TextField 
+            label="Nombre" 
+            value={newName} 
+            onChange={e => setNewName(e.target.value)} 
+            sx={{ flex: 1, minWidth: 200 }}
+          />
+          <TextField 
+            label="Descripción" 
+            value={newDesc} 
+            onChange={e => setNewDesc(e.target.value)} 
+            sx={{ flex: 2, minWidth: 250 }}
+          />
+          <Button 
+            variant="contained" 
+            onClick={handleAdd}
+            startIcon={<AddIcon />}
+            sx={{ 
+              background: gradients.success, 
+              px: 3,
+              '&:hover': { opacity: 0.9 }
+            }}
+          >
+            Agregar
+          </Button>
         </Box>
-        <List>
-          {reasons.map(r => {
-            const isDark = theme?.palette?.mode === 'dark';
-            return (
+      </SectionContainer>
+      
+      <SectionContainer title="Motivos Configurados" icon={<PauseCircleIcon />}>
+        {reasons.length === 0 ? (
+          <EmptyState message="No hay motivos de pausa configurados para este departamento" icon={<PauseCircleIcon />} />
+        ) : (
+          <List>
+            {reasons.map(r => (
               <ListItem
                 key={r.id}
-                secondaryAction={
-                  isDark ? (
-                    <Button
-                      variant="contained"
-                      size="small"
-                      onClick={() => handleDelete(r.id)}
-                      sx={{ color: '#000000ff', borderColor: 'rgba(255,255,255,0.23)' }}
-                    >
-                      Eliminar
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="contained"
-                      size="small"
-                      color="error"
-                      onClick={() => handleDelete(r.id)}
-                    >
-                      Eliminar
-                    </Button>
-                  )
-                }
+                sx={{ 
+                  mb: 1, 
+                  borderRadius: 2, 
+                  bgcolor: alpha(theme.palette.background.paper, 0.6),
+                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  '&:hover': { bgcolor: alpha(theme.palette.warning.main, 0.05) }
+                }}
               >
-                <ListItemText primary={r.nombre} secondary={r.descripcion} />
+                <ListItemText 
+                  primary={<Typography fontWeight={600}>{r.nombre}</Typography>} 
+                  secondary={r.descripcion} 
+                />
+                <ListItemSecondaryAction>
+                  <IconButton 
+                    edge="end" 
+                    onClick={() => handleDelete(r.id)}
+                    sx={{ 
+                      color: theme.palette.error.main,
+                      '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.1) }
+                    }}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </ListItemSecondaryAction>
               </ListItem>
-            );
-          })}
-        </List>
-      </Paper>
-    </Box>
+            ))}
+          </List>
+        )}
+      </SectionContainer>
+    </ModuleContainer>
   );
 }

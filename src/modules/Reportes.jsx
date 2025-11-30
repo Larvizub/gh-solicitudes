@@ -1,6 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useTheme } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import { ReportesPieChart, ReportesBarChart, ReportesLineChart, ReportesAreaChart, ReportesHorizontalBarChart } from './ReportesCharts';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import TableChartIcon from '@mui/icons-material/TableChart';
+import { ModuleContainer, PageHeader, GlassCard, SectionContainer, gradients } from '../components/ui/SharedStyles';
+import useNotification from '../context/useNotification';
 
 // ErrorBoundary simple para DataGrid
 class DataGridErrorBoundary extends React.Component {
@@ -48,6 +53,7 @@ export default function Reportes() {
   const monthlyRef = useRef();
   const { db: ctxDb, recinto } = useDb();
   const { userData } = useAuth();
+  const { notify } = useNotification();
   const [tickets, setTickets] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
   // SLA configuration states
@@ -62,6 +68,13 @@ export default function Reportes() {
   const [filtroEstado, setFiltroEstado] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const theme = useTheme();
+
+  // Mostrar notificaciones
+  useEffect(() => {
+    if (snackbar.open) {
+      notify(snackbar.message, snackbar.severity);
+    }
+  }, [snackbar, notify]);
 
 
   // Filtros y datos para los gráficos
@@ -946,9 +959,15 @@ export default function Reportes() {
   };
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 3 }, width: '100%', maxWidth: '100vw', minHeight: '90vh', boxSizing: 'border-box', background: theme => theme.palette.background.default }}>
-      <Typography variant="h5" sx={{ mb: 3, fontWeight: 700, letterSpacing: 1 }}>Reportes</Typography>
-      <Paper elevation={1} sx={{ p: 3, borderRadius: 4, mb: 3, boxShadow: 1 }}>
+    <ModuleContainer>
+      <PageHeader 
+        title="Reportes" 
+        subtitle="Analiza y exporta información de tickets"
+        icon={<AssessmentIcon />}
+        gradient={gradients.dark}
+      />
+      
+      <SectionContainer title="Filtros" icon={<FilterListIcon />}>
         <Grid container spacing={2} alignItems="center">
           <Grid gridColumn={{ xs: '1 / -1', sm: 'span 3', md: 'span 3' }} sx={{ minWidth: 220, maxWidth: 340, width: '100%' }}>
             <TextField
@@ -983,19 +1002,36 @@ export default function Reportes() {
             </TextField>
           </Grid>
           <Grid gridColumn={{ xs: '1 / -1', sm: 'span 6', md: 'span 6' }} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, gap: 2 }}>
-               <Button variant="contained" color="primary" onClick={handleExportExcel} sx={{ minWidth: 140, bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined }}>
+            <Button 
+              variant="contained" 
+              onClick={handleExportExcel} 
+              sx={{ 
+                minWidth: 140, 
+                background: gradients.success,
+                fontWeight: 600,
+                '&:hover': { opacity: 0.9 }
+              }}
+            >
               Exportar a Excel
             </Button>
-               <Button variant="contained" color="secondary" onClick={handleExportPDF} disabled={exportandoPdf} sx={{ minWidth: 140, bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined, color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined }}>
+            <Button 
+              variant="contained" 
+              onClick={handleExportPDF} 
+              disabled={exportandoPdf} 
+              sx={{ 
+                minWidth: 140, 
+                background: gradients.error,
+                fontWeight: 600,
+                '&:hover': { opacity: 0.9 }
+              }}
+            >
               {exportandoPdf ? 'Generando...' : 'Exportar a PDF'}
             </Button>
           </Grid>
         </Grid>
-      </Paper>
-  <Paper elevation={1} sx={{ p: 2, borderRadius: 4, minHeight: 400, boxShadow: 1, background: 'background.paper' }}>
-  <Typography variant="h6" sx={{ mb: 2, fontWeight: 700, letterSpacing: 1, color: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.primary.main }}>
-          Tickets (vista tabla)
-        </Typography>
+      </SectionContainer>
+      
+      <SectionContainer title="Tickets (vista tabla)" icon={<TableChartIcon />}>
         {loading ? (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
             <CircularProgress size={60} color="primary" />
@@ -1013,22 +1049,26 @@ export default function Reportes() {
               sx={{
                 border: 0,
                 fontSize: 15,
-                background: 'background.paper',
+                background: 'transparent',
                 borderRadius: 2,
                 '& .MuiDataGrid-columnHeaders': {
-                  bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.grey[100],
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
                   fontWeight: 700,
-                  fontSize: 16,
-                  letterSpacing: 1,
+                  fontSize: 14,
+                  borderRadius: 2,
                 },
-                '& .MuiDataGrid-row:hover': {
-                  background: theme => theme.palette.action.hover,
+                '& .MuiDataGrid-row': {
+                  '&:hover': {
+                    background: alpha(theme.palette.primary.main, 0.04),
+                  },
                 },
                 '& .MuiDataGrid-cell': {
-                  fontSize: 15,
+                  fontSize: 14,
+                  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
                 },
                 '& .MuiDataGrid-footerContainer': {
-                  bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.background.default : theme.palette.grey[50],
+                  bgcolor: alpha(theme.palette.background.paper, 0.5),
+                  borderRadius: '0 0 8px 8px',
                 },
               }}
               disableSelectionOnClick
@@ -1037,7 +1077,7 @@ export default function Reportes() {
             />
           </DataGridErrorBoundary>
         )}
-      </Paper>
+      </SectionContainer>
       {/* Gráficos debajo de la tabla */}
       <Box
         sx={{
@@ -1048,78 +1088,56 @@ export default function Reportes() {
           width: '100%',
         }}
       >
-        <Paper
-          elevation={2}
-          sx={{
-            p: 2,
-            borderRadius: 3,
-            flex: 1,
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
-          }}
-        >
+        <GlassCard sx={{ p: 2, flex: 1 }}>
           <Box ref={pieRef} sx={{ width: '100%' }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tickets por Estado</Typography>
             <ReportesPieChart data={ticketsPorEstado} title="Tickets por Estado" />
           </Box>
-        </Paper>
-        <Paper
-          elevation={2}
-          sx={{
-            p: 2,
-            borderRadius: 3,
-            flex: 1,
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
-          }}
-        >
+        </GlassCard>
+        <GlassCard sx={{ p: 2, flex: 1 }}>
           <Box ref={barRef} sx={{ width: '100%' }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tickets por Departamento</Typography>
             <ReportesBarChart data={ticketsPorDepartamento} title="Tickets por Departamento" xKey="name" yKey="value" />
           </Box>
-        </Paper>
+        </GlassCard>
       </Box>
       {/* Nuevos gráficos adicionales */}
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, mt: 3, width: '100%' }}>
-        <Paper elevation={2} sx={{ p: 2, borderRadius: 3, flex: 1 }}>
+        <GlassCard sx={{ p: 2, flex: 1 }}>
           <Box ref={tipoRef} sx={{ width: '100%' }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tickets por Tipo</Typography>
             <ReportesBarChart data={ticketsPorTipo} title="Tickets por Tipo" xKey="name" yKey="value" />
           </Box>
-        </Paper>
-        <Paper elevation={2} sx={{ p: 2, borderRadius: 3, flex: 1 }}>
+        </GlassCard>
+        <GlassCard sx={{ p: 2, flex: 1 }}>
           <Box ref={topUsersRef} sx={{ width: '100%' }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Top Usuarios (tickets totales)</Typography>
             <ReportesHorizontalBarChart data={topUsuarios} title="Top Usuarios (tickets totales)" xKey="name" yKey="value" />
           </Box>
-        </Paper>
+        </GlassCard>
       </Box>
 
       <Box sx={{ mt: 3 }}>
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3, mb: 3 }}>
-          <Paper elevation={2} sx={{ p: 2, borderRadius: 3, flex: 1 }}>
+          <GlassCard sx={{ p: 2, flex: 1 }}>
             <Box ref={avgDeptRef} sx={{ width: '100%' }}>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tiempo promedio de cierre de Tickets por Departamento (horas)</Typography>
               <ReportesBarChart data={avgByDept} title="Tiempo promedio (horas)" xKey="name" yKey="value" />
             </Box>
-          </Paper>
-          <Paper elevation={2} sx={{ p: 2, borderRadius: 3, flex: 1 }}>
+          </GlassCard>
+          <GlassCard sx={{ p: 2, flex: 1 }}>
             <Box ref={avgUserRef} sx={{ width: '100%' }}>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tiempo promedio de cierre de Tickets por Usuario (horas)</Typography>
               <ReportesBarChart data={avgByUser} title="Tiempo promedio (horas)" xKey="name" yKey="value" />
             </Box>
-          </Paper>
+          </GlassCard>
         </Box>
-        <Paper elevation={2} sx={{ p: 2, borderRadius: 3 }}>
+        <GlassCard sx={{ p: 2 }}>
           <Box ref={monthlyRef} sx={{ width: '100%' }}>
             <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>Tickets mensuales (acumulado)</Typography>
             <ReportesAreaChart data={acumuladoMensual} title="Tickets mensuales (acumulado)" xKey="month" areas={[{ dataKey: 'total', color: '#1976d2' }]} />
           </Box>
-        </Paper>
+        </GlassCard>
       </Box>
   {/* avgByDept chart moved above replacing the monthly series chart */}
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
@@ -1127,6 +1145,6 @@ export default function Reportes() {
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Box>
+    </ModuleContainer>
   );
 }
