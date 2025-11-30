@@ -177,7 +177,7 @@ export function StatCard({
   icon: Icon, 
   gradient = 'primary',
   trend,
-  trendLabel,
+  // trendLabel - reservado para uso futuro
   delay = 0,
   onClick
 }) {
