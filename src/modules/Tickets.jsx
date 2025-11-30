@@ -1070,11 +1070,11 @@ export default function Tickets() {
                           {ticket.descripcion}
                         </Typography>
                         <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <IconButton size="small" onClick={() => handleOpenDialog(ticket)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.primary.main } }}>
+                          <IconButton size="small" onClick={(e) => { e.stopPropagation(); handleOpenDialog(ticket); }} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.primary.main } }}>
                             <EditIcon fontSize="small" />
                           </IconButton>
                           {(() => { const isCreator = (ticket.usuarioEmail || '').toLowerCase() === (user?.email || '').toLowerCase(); return (isAdmin || isCreator); })() && (
-                            <IconButton size="small" color="error" onClick={() => confirmDelete(ticket)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
+                            <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); confirmDelete(ticket); }} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           )}
@@ -1082,7 +1082,7 @@ export default function Tickets() {
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {ticket.adjuntoUrl && (
-                          <Button href={ticket.adjuntoUrl} target="_blank" size="small" sx={{ textTransform: 'none', minWidth: 0, p: 0.5 }}>
+                          <Button href={ticket.adjuntoUrl} target="_blank" size="small" onClick={(e) => e.stopPropagation()} sx={{ textTransform: 'none', minWidth: 0, p: 0.5 }}>
                             <Chip label="Adjunto" color="info" size="small" />
                           </Button>
                         )}

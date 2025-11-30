@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import useNotification from '../context/useNotification';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip, IconButton, Divider, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress } from '@mui/material';
+import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip, IconButton, Divider, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, alpha, useTheme, Avatar, Fade, Grow } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import SendIcon from '@mui/icons-material/Send';
@@ -9,6 +9,9 @@ import AddIcon from '@mui/icons-material/Add';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import UpdateIcon from '@mui/icons-material/Update';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import { ModuleContainer, PageHeader, GlassCard } from '../components/ui/SharedStyles';
 import { ref as dbRef, get, set, update, push, runTransaction, remove } from 'firebase/database';
 import { storage } from '../firebase/firebaseConfig';
 import { getDbForRecinto } from '../firebase/multiDb';
@@ -1292,43 +1295,49 @@ export default function TicketPage() {
     } catch (e) { console.warn('Error computing worked ms', e); return null; }
   };
 
+  const theme = useTheme();
+
   if (loading) return (
-    <Box sx={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Typography>Cargando...</Typography>
-    </Box>
+    <ModuleContainer>
+      <Box sx={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Box>
+    </ModuleContainer>
   );
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Paper
-        sx={{
-          p: 3,
-          borderRadius: 3,
-          boxShadow: theme => theme.shadows[2],
-          backgroundColor: theme => theme.palette.background.paper,
-          '&:hover': {
-            boxShadow: theme => theme.shadows[4],
-          }
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 900 }}>{isNew ? 'Nuevo Ticket' : `Ticket ${form.codigo || id}`}</Typography>
-            {!isNew && (
-              <Typography variant="caption" color="text.secondary">Tiempo trabajado: {msToHoursMinutes(computeWorkedMsForTicket(form))}</Typography>
-            )}
-          </Box>
-          {!isNew && canDelete && (
-            <Tooltip title="Eliminar ticket" placement="left">
-              <span>
-                <IconButton color="error" onClick={() => setDeleteDialogOpen(true)} disabled={saving || deleting} size="small" sx={{ bgcolor: 'error.light', '&:hover': { bgcolor: 'error.main', color: 'error.contrastText' } }}>
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-          )}
-        </Box>
-  {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+    <ModuleContainer>
+      <Fade in timeout={600}>
+        <Box>
+          <PageHeader
+            title={isNew ? 'Nuevo Ticket' : `Ticket ${form.codigo || id}`}
+            subtitle={!isNew ? `Tiempo trabajado: ${msToHoursMinutes(computeWorkedMsForTicket(form))}` : 'Completa los campos para crear un nuevo ticket'}
+            icon={ConfirmationNumberIcon}
+            gradient="primary"
+            actions={
+              !isNew && canDelete ? (
+                <Tooltip title="Eliminar ticket" placement="left">
+                  <span>
+                    <IconButton 
+                      onClick={() => setDeleteDialogOpen(true)} 
+                      disabled={saving || deleting} 
+                      size="small" 
+                      sx={{ 
+                        bgcolor: alpha('#fff', 0.2), 
+                        color: '#fff',
+                        '&:hover': { bgcolor: alpha('#fff', 0.3) } 
+                      }}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              ) : null
+            }
+          />
+
+      <GlassCard sx={{ mt: 3 }}>
+  {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{error}</Alert>}
   {/* Alert de éxito removido; se usa Snackbar inferior */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
           {/* Primera fila: Solicitud para + Categoría (responsive: column en xs, row en sm+ ) */}
@@ -1647,8 +1656,13 @@ export default function TicketPage() {
           {/* Pause controls moved below the conversation */}
           {/* Comentarios */}
           {!isNew && (
-            <Paper sx={{ p: 2, mt: 1, borderRadius: 3 }} elevation={0}>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>Conversación</Typography>
+            <GlassCard sx={{ p: 3, mt: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Avatar sx={{ bgcolor: alpha(theme.palette.primary.main, 0.2), width: 32, height: 32 }}>
+                  <SendIcon sx={{ color: theme.palette.primary.main, fontSize: 18 }} />
+                </Avatar>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Conversación</Typography>
+              </Box>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 360, overflowY: 'auto', pr: 1 }}>
                 {commentsArr && commentsArr.length === 0 && <Typography variant="body2" color="text.secondary">Aún no hay comentarios.</Typography>}
                 {commentsArr && commentsArr.map(c => {
@@ -1835,21 +1849,17 @@ export default function TicketPage() {
                   </Tooltip>
                 </Box>
               </Box>
-            </Paper>
+            </GlassCard>
           )}
           {/* Pause controls (moved) */}
           {!isNew && (
-            <Paper
-              sx={{
-                p: 3,
-                mt: 2,
-                borderRadius: 3,
-                backgroundColor: theme => theme.palette.background.default,
-                border: theme => `1px solid ${theme.palette.divider}`
-              }}
-              elevation={0}
-            >
-              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700 }}>Control de Pausa</Typography>
+            <GlassCard sx={{ p: 3, mt: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Avatar sx={{ bgcolor: alpha(theme.palette.warning.main, 0.2), width: 32, height: 32 }}>
+                  <AccessTimeIcon sx={{ color: theme.palette.warning.main, fontSize: 18 }} />
+                </Avatar>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Control de Pausa</Typography>
+              </Box>
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                 <TextField
                   select
@@ -1986,7 +1996,7 @@ export default function TicketPage() {
                   </Box>
                 </Box>
               )}
-            </Paper>
+            </GlassCard>
           )}
           {/* botones al final del formulario */}
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
@@ -2059,22 +2069,35 @@ export default function TicketPage() {
             </Tooltip>
           </Box>
         </Box>
-      </Paper>
+      </GlassCard>
+      </Box>
+      </Fade>
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert onClose={() => setSnackbar(s => ({ ...s, open: false }))} severity={snackbar.severity} sx={{ width: '100%' }}>
+        <Alert onClose={() => setSnackbar(s => ({ ...s, open: false }))} severity={snackbar.severity} sx={{ width: '100%', borderRadius: 2 }}>
           {snackbar.message}
         </Alert>
       </Snackbar>
-      <Dialog open={deleteDialogOpen} onClose={() => (!deleting && setDeleteDialogOpen(false))} maxWidth="xs" fullWidth>
-        <DialogTitle>Confirmar eliminación</DialogTitle>
+      <Dialog 
+        open={deleteDialogOpen} 
+        onClose={() => (!deleting && setDeleteDialogOpen(false))} 
+        maxWidth="xs" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            backdropFilter: 'blur(10px)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700 }}>Confirmar eliminación</DialogTitle>
         <DialogContent>
           <Typography variant="body2">¿Seguro que deseas eliminar este ticket? Esta acción no se puede deshacer.</Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>Cancelar</Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleting}>{deleting ? 'Eliminando...' : 'Eliminar'}</Button>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting} sx={{ borderRadius: 2 }}>Cancelar</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleting} sx={{ borderRadius: 2 }}>{deleting ? 'Eliminando...' : 'Eliminar'}</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </ModuleContainer>
   );
 }
