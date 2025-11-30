@@ -34,9 +34,9 @@ import {
   GlassCard, 
   ModuleContainer, 
   SectionContainer,
-  dialogStyles,
   EmptyState 
 } from '../components/ui/SharedStyles';
+import { dialogStyles } from '../components/ui/sharedStyles.constants';
 import useNotification from '../context/useNotification';
 
 export default function ConfigTickets() {

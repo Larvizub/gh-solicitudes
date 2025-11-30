@@ -25,7 +25,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { ref, get, push, set, remove } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
-import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState, gradients, dialogStyles } from '../components/ui/SharedStyles';
+import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState } from '../components/ui/SharedStyles';
+import { gradients, dialogStyles } from '../components/ui/sharedStyles.constants';
 import useNotification from '../context/useNotification';
 
 export default function ConfigSubcategorias() {

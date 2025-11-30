@@ -12,7 +12,8 @@ import { useAuth } from '../context/useAuth';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
 import { auth } from '../firebase/firebaseConfig';
-import { ModuleContainer, PageHeader, GlassCard, StatCard, gradients, dialogStyles } from '../components/ui/SharedStyles';
+import { ModuleContainer, PageHeader, GlassCard, StatCard } from '../components/ui/SharedStyles';
+import { gradients, dialogStyles } from '../components/ui/sharedStyles.constants';
 import useNotification from '../context/useNotification';
 
 export default function Perfil() {

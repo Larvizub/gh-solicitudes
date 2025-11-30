@@ -4,7 +4,8 @@ import { ReportesPieChart, ReportesBarChart, ReportesLineChart, ReportesAreaChar
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import TableChartIcon from '@mui/icons-material/TableChart';
-import { ModuleContainer, PageHeader, GlassCard, SectionContainer, gradients } from '../components/ui/SharedStyles';
+import { ModuleContainer, PageHeader, GlassCard, SectionContainer } from '../components/ui/SharedStyles';
+import { gradients } from '../components/ui/sharedStyles.constants';
 import useNotification from '../context/useNotification';
 
 // ErrorBoundary simple para DataGrid

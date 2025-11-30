@@ -7,7 +7,8 @@ import SaveIcon from '@mui/icons-material/Save';
 import { ref, get, set } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
-import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState, gradients } from '../components/ui/SharedStyles';
+import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState } from '../components/ui/SharedStyles';
+import { gradients } from '../components/ui/sharedStyles.constants';
 import useNotification from '../context/useNotification';
 
 export default function ConfigCorreo() {

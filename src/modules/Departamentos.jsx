@@ -23,9 +23,8 @@ import {
   PageHeader, 
   GlassCard, 
   ModuleContainer, 
-  tableStyles, 
-  dialogStyles 
 } from '../components/ui/SharedStyles';
+import { tableStyles, dialogStyles } from '../components/ui/sharedStyles.constants';
 import useNotification from '../context/useNotification';
 
 export default function Departamentos() {

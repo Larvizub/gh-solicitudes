@@ -35,9 +35,9 @@ import {
   StatCard,
   ModuleContainer, 
   SectionContainer,
-  dialogStyles,
   EmptyState 
 } from '../components/ui/SharedStyles';
+import { dialogStyles } from '../components/ui/sharedStyles.constants';
 import useNotification from '../context/useNotification';
 
 // Módulo SLA - productivo y práctico

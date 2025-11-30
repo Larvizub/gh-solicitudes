@@ -12,7 +12,8 @@ import { ref, get, set, remove } from 'firebase/database';
 import { getDbForRecinto } from '../firebase/multiDb';
 import { useAuth } from '../context/useAuth';
 import { useDb } from '../context/DbContext';
-import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState, gradients } from '../components/ui/SharedStyles';
+import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState } from '../components/ui/SharedStyles';
+import { gradients } from '../components/ui/sharedStyles.constants';
 import useNotification from '../context/useNotification';
 
 // Módulo para gestionar autorizaciones de usuarios de recintos a la base Corporate

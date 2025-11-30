@@ -32,10 +32,8 @@ import {
   PageHeader, 
   GlassCard, 
   ModuleContainer, 
-  tableStyles, 
-  dialogStyles,
-  gradients 
 } from '../components/ui/SharedStyles';
+import { tableStyles, dialogStyles, gradients } from '../components/ui/sharedStyles.constants';
 
 export default function Usuarios() {
   const { userData } = useAuth();
