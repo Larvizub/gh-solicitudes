@@ -176,8 +176,7 @@ export function StatCard({
   subtitle, 
   icon: Icon, 
   gradient = 'primary',
-  trend,
-  // trendLabel - reservado para uso futuro
+  isText = false,
   delay = 0,
   onClick
 }) {
@@ -230,7 +229,10 @@ export function StatCard({
             <Typography variant="body2" sx={{ opacity: 0.9, fontWeight: 500, mb: 0.5 }}>
               {title}
             </Typography>
-            <Typography variant="h3" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
+            <Typography 
+              variant={isText ? 'h5' : 'h3'} 
+              sx={{ fontWeight: 800, lineHeight: 1.1 }}
+            >
               {value}
             </Typography>
           </Box>
@@ -241,13 +243,11 @@ export function StatCard({
           )}
         </Box>
         
-        {(subtitle || trend !== undefined) && (
+        {subtitle && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, zIndex: 1 }}>
-            {subtitle && (
-              <Typography variant="caption" sx={{ opacity: 0.85 }}>
-                {subtitle}
-              </Typography>
-            )}
+            <Typography variant="caption" sx={{ opacity: 0.85 }}>
+              {subtitle}
+            </Typography>
           </Box>
         )}
       </Paper>
