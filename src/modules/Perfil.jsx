@@ -407,9 +407,10 @@ export default function Perfil() {
         gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
         gap: 3,
         alignItems: 'flex-start',
+        overflow: 'hidden',
       }}>
         {/* Columna 1: Info personal y actividad */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, overflow: 'hidden' }}>
           {/* Tarjeta de información personal */}
           <GlassCard sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <Badge
@@ -478,7 +479,7 @@ export default function Perfil() {
           </GlassCard>
           
           {/* Tarjeta de actividad */}
-          <GlassCard sx={{ p: 3 }}>
+          <GlassCard sx={{ p: 3, overflow: 'hidden', minWidth: 0 }}>
             <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>Últimos Tickets</Typography>
             <List dense sx={{ bgcolor: 'transparent' }}>
               {ultimosTickets.length === 0 && (
@@ -494,11 +495,26 @@ export default function Perfil() {
                     borderRadius: 2, 
                     bgcolor: alpha(theme.palette.background.paper, 0.5),
                     border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.05) }
+                    '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.05) },
+                    overflow: 'hidden',
+                    minWidth: 0,
                   }}
                 >
                   <ListItemText
-                    primary={<Typography fontWeight={600} noWrap>{t.descripcion}</Typography>}
+                    primary={
+                      <Typography 
+                        fontWeight={600} 
+                        sx={{ 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          whiteSpace: 'nowrap',
+                          maxWidth: '100%',
+                          display: 'block'
+                        }}
+                      >
+                        {t.descripcion}
+                      </Typography>
+                    }
                     secondary={
                       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
                         <Chip 
@@ -512,6 +528,7 @@ export default function Perfil() {
                       </Box>
                     }
                     secondaryTypographyProps={{ component: 'div' }}
+                    sx={{ overflow: 'hidden', minWidth: 0 }}
                   />
                 </ListItem>
               ))}
