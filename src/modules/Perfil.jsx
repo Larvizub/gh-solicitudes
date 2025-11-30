@@ -375,8 +375,8 @@ export default function Perfil() {
       <PageHeader 
         title="Mi Perfil" 
         subtitle="Administra tu información personal y configuración"
-        icon={<PersonIcon />}
-        gradient={gradients.info}
+        icon={PersonIcon}
+        gradient="info"
       />
       
       {/* Stats Cards */}
@@ -384,20 +384,20 @@ export default function Perfil() {
         <StatCard
           title="Tickets Creados"
           value={ticketsCreados}
-          icon={<AssignmentIcon />}
-          gradient={gradients.primary}
+          icon={AssignmentIcon}
+          gradient="primary"
         />
         <StatCard
           title="Tickets Cerrados"
           value={ticketsCerrados}
-          icon={<CheckCircleIcon />}
-          gradient={gradients.success}
+          icon={CheckCircleIcon}
+          gradient="success"
         />
         <StatCard
           title="Miembro desde"
           value={fechaRegistro || '-'}
-          icon={<CalendarTodayIcon />}
-          gradient={gradients.info}
+          icon={CalendarTodayIcon}
+          gradient="info"
           isText
         />
       </Box>

@@ -92,7 +92,7 @@ export default function ConfigCorreo() {
       </GlassCard>
       
       {selectedDep && (
-        <SectionContainer title="Pool de correos" icon={<EmailIcon />}>
+        <SectionContainer title="Pool de correos" icon={EmailIcon}>
           <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
             <TextField
               sx={{ flex: 1, minWidth: 250 }}
@@ -116,7 +116,7 @@ export default function ConfigCorreo() {
           </Box>
           
           {pool.length === 0 ? (
-            <EmptyState message="No hay correos en el pool" icon={<EmailIcon />} />
+            <EmptyState message="No hay correos en el pool" icon={EmailIcon} />
           ) : (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
               {pool.map(email => (

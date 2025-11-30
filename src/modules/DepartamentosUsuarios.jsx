@@ -116,8 +116,8 @@ export default function DepartamentosUsuarios() {
       <PageHeader 
         title="Asignación de Usuarios" 
         subtitle="Asigna usuarios a departamentos de tu organización"
-        icon={<GroupIcon />}
-        gradient={gradients.secondary}
+        icon={GroupIcon}
+        gradient="secondary"
       />
       
       <GlassCard sx={{ p: 3, mb: 3 }}>
@@ -137,9 +137,9 @@ export default function DepartamentosUsuarios() {
       </GlassCard>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
-        <SectionContainer title={`Usuarios asignados a "${selectedDeptName || '—'}"`} icon={<GroupIcon />}>
+        <SectionContainer title={`Usuarios asignados a "${selectedDeptName || '—'}"`} icon={GroupIcon}>
           {assigned.length === 0 ? (
-            <EmptyState message="No hay usuarios asignados a este departamento" icon={<GroupIcon />} />
+            <EmptyState message="No hay usuarios asignados a este departamento" icon={GroupIcon} />
           ) : (
             <List>
               {assigned.map(u => (
@@ -176,9 +176,9 @@ export default function DepartamentosUsuarios() {
           )}
         </SectionContainer>
 
-        <SectionContainer title="Usuarios disponibles" icon={<PersonAddIcon />}>
+        <SectionContainer title="Usuarios disponibles" icon={PersonAddIcon}>
           {available.length === 0 ? (
-            <EmptyState message="No hay usuarios disponibles para asignar" icon={<PersonAddIcon />} />
+            <EmptyState message="No hay usuarios disponibles para asignar" icon={PersonAddIcon} />
           ) : (
             <List>
               {available.map(u => (

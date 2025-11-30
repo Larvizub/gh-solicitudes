@@ -107,8 +107,8 @@ export default function PauseReasons() {
       <PageHeader 
         title="Motivos de Pausa" 
         subtitle="Configura los motivos de pausa disponibles por departamento"
-        icon={<PauseCircleIcon />}
-        gradient={gradients.orange}
+        icon={PauseCircleIcon}
+        gradient="orange"
       />
       
       <GlassCard sx={{ p: 3, mb: 3 }}>
@@ -125,7 +125,7 @@ export default function PauseReasons() {
         </Box>
       </GlassCard>
       
-      <SectionContainer title="Agregar Nuevo Motivo" icon={<AddIcon />}>
+      <SectionContainer title="Agregar Nuevo Motivo" icon={AddIcon}>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <TextField 
             label="Nombre" 
@@ -154,9 +154,9 @@ export default function PauseReasons() {
         </Box>
       </SectionContainer>
       
-      <SectionContainer title="Motivos Configurados" icon={<PauseCircleIcon />}>
-        {reasons.length === 0 ? (
-          <EmptyState message="No hay motivos de pausa configurados para este departamento" icon={<PauseCircleIcon />} />
+      <SectionContainer title="Motivos Configurados" icon={PauseCircleIcon}>
+          {reasons.length === 0 ? (
+          <EmptyState message="No hay motivos de pausa configurados para este departamento" icon={PauseCircleIcon} />
         ) : (
           <List>
             {reasons.map(r => (

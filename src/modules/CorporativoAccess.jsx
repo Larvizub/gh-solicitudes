@@ -169,8 +169,8 @@ export default function CorporativoAccess() {
       <PageHeader 
         title="Gestión de acceso a Corporativo" 
         subtitle="Autoriza usuarios de tu recinto para acceder a la base corporativa"
-        icon={<BusinessIcon />}
-        gradient={gradients.dark}
+        icon={BusinessIcon}
+        gradient="dark"
       />
 
       <GlassCard sx={{ p: 3, mb: 3 }}>
@@ -206,7 +206,7 @@ export default function CorporativoAccess() {
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
-          <SectionContainer title={`Usuarios en ${sourceRecinto}`} icon={<PeopleIcon />}>
+          <SectionContainer title={`Usuarios en ${sourceRecinto}`} icon={PeopleIcon}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
               <Chip
                 label={`${usuariosOrigen.length} encontrados`}
@@ -219,7 +219,7 @@ export default function CorporativoAccess() {
             {loadingSource ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>
             ) : usuariosOrigen.length === 0 ? (
-              <EmptyState message="Carga usuarios del recinto origen" icon={<PeopleIcon />} />
+              <EmptyState message="Carga usuarios del recinto origen" icon={PeopleIcon} />
             ) : (
               <TableContainer>
                 <Table size="small">
@@ -265,7 +265,7 @@ export default function CorporativoAccess() {
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <SectionContainer title={`Usuarios autorizados en ${corporateRecinto}`} icon={<VerifiedUserIcon />}>
+          <SectionContainer title={`Usuarios autorizados en ${corporateRecinto}`} icon={VerifiedUserIcon}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
               <Chip
                 label={`${Object.keys(authorized || {}).length} autorizados`}
@@ -278,7 +278,7 @@ export default function CorporativoAccess() {
             {loadingAuth ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box>
             ) : Object.keys(authorized || {}).length === 0 ? (
-              <EmptyState message="No hay usuarios autorizados" icon={<VerifiedUserIcon />} />
+              <EmptyState message="No hay usuarios autorizados" icon={VerifiedUserIcon} />
             ) : (
               <TableContainer>
                 <Table size="small">

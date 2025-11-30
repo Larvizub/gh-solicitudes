@@ -153,8 +153,8 @@ export default function ConfigSubcategorias() {
       <PageHeader 
         title="Subcategorías" 
         subtitle="Configura las subcategorías para cada tipo de ticket por departamento"
-        icon={<CategoryIcon />}
-        gradient={gradients.teal}
+        icon={CategoryIcon}
+        gradient="teal"
       />
       
       {/* Campo de búsqueda */}
@@ -170,9 +170,9 @@ export default function ConfigSubcategorias() {
         />
       </GlassCard>
 
-      <SectionContainer title="Subcategorías por Categoría" icon={<CategoryIcon />}>
+      <SectionContainer title="Subcategorías por Categoría" icon={CategoryIcon}>
         {filasFiltradas.length === 0 ? (
-          <EmptyState message="No hay categorías configuradas" icon={<CategoryIcon />} />
+          <EmptyState message="No hay categorías configuradas" icon={CategoryIcon} />
         ) : (
           <TableContainer component={Paper} elevation={0} sx={{ bgcolor: 'transparent' }}>
             <Table>

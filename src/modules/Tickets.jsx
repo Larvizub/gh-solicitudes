@@ -29,13 +29,20 @@ import {
   Tabs,
   Tab,
   Badge,
-  Autocomplete
+  Autocomplete,
+  alpha,
+  useTheme,
+  Avatar,
+  Fade,
+  Grow,
 } from '@mui/material';
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import UpdateIcon from "@mui/icons-material/Update";
 import SaveIcon from "@mui/icons-material/Save";
+import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
+import AssignmentIcon from "@mui/icons-material/Assignment";
 import { ref, get, set, update, remove, push, query, orderByChild } from "firebase/database";
 import { storage } from "../firebase/firebaseConfig";
 import { getDbForRecinto } from '../firebase/multiDb';
@@ -44,6 +51,8 @@ import { useAuth } from "../context/useAuth";
 import { canViewAllTickets, isAdminRole } from '../utils/roles';
 import useNotification from '../context/useNotification';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ModuleContainer, PageHeader, GlassCard, StatCard } from '../components/ui/SharedStyles';
+import { gradients } from '../components/ui/sharedStyles.constants';
 
 export default function Tickets() {
   const { user, userData } = useAuth();
@@ -720,112 +729,147 @@ export default function Tickets() {
     ? subcats[form.departamento][tipoKey]
     : null;
 
+  const theme = useTheme();
+
   return (
-    <Box
-      sx={{
-        p: { xs: 1, sm: 2 },
-        display: "flex",
-        flexDirection: "column",
-        flex: 1,
-        minWidth: 0,
-        minHeight: "90vh",
-        width: "100%",
-        maxWidth: "100vw",
-        margin: "0 auto",
-        boxSizing: "border-box",
-        background: theme => theme.palette.background.default,
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
-        <Typography variant="h5" sx={{ flexGrow: 1, fontWeight: 900, letterSpacing: 1, color: 'text.primary' }}>
-          Tickets
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{
-            fontWeight: 700,
-            boxShadow: 2,
-            width: { xs: '100%', sm: 'auto' },
-            bgcolor: theme => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined,
-            color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : undefined,
-            '& .MuiSvgIcon-root': { color: theme => theme.palette.mode === 'dark' ? theme.palette.getContrastText(theme.palette.common.white) : 'inherit' },
-          }}
-        >
-          Nuevo Ticket
-        </Button>
+    <ModuleContainer>
+      <PageHeader
+        title="Tickets"
+        subtitle={`${ticketsToRender?.length || 0} tickets activos`}
+        icon={ConfirmationNumberIcon}
+        gradient="primary"
+        action={
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+            sx={{
+              fontWeight: 700,
+              bgcolor: alpha('#fff', 0.2),
+              color: '#fff',
+              '&:hover': { bgcolor: alpha('#fff', 0.3) },
+            }}
+          >
+            Nuevo Ticket
+          </Button>
+        }
+      />
+
+      {/* Stats Cards */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
+        <StatCard
+          title="Asignados a mí"
+          value={assignedTickets.length}
+          icon={AssignmentIcon}
+          gradient="primary"
+          delay={0}
+          onClick={() => setViewTab('assigned')}
+        />
+        <StatCard
+          title="Creados por mí"
+          value={createdTickets.length}
+          icon={ConfirmationNumberIcon}
+          gradient="secondary"
+          delay={100}
+          onClick={() => setViewTab('created')}
+        />
+        <StatCard
+          title="Mi Departamento"
+          value={deptTickets.length}
+          icon={AssignmentIcon}
+          gradient="info"
+          delay={200}
+          onClick={() => setViewTab('dept')}
+        />
+        {isAdmin && (
+          <StatCard
+            title="Todos"
+            value={allTickets.length}
+            icon={ConfirmationNumberIcon}
+            gradient="warning"
+            delay={300}
+            onClick={() => setViewTab('all')}
+          />
+        )}
       </Box>
-      {/* Tabs para vistas: asignados, creados por mi, mi departamento, todos (admin) */}
-      <Paper sx={{ mb: 2, p: 1 }} elevation={1}>
+
+      {/* Tabs para vistas */}
+      <GlassCard sx={{ mb: 2, p: 1 }}>
         <Tabs
           value={viewTab}
           onChange={(e, val) => setViewTab(val)}
           variant="scrollable"
           scrollButtons="auto"
-          sx={(theme) => ({
-            // indicador y texto seleccionado en modo oscuro: usar variante clara tipo dorado
+          sx={{
             '& .MuiTabs-indicator': {
-              backgroundColor: theme.palette.mode === 'dark' ? theme.palette.warning.light : undefined,
+              backgroundColor: theme.palette.primary.main,
+              height: 3,
+              borderRadius: 2,
             },
             '& .MuiTab-root.Mui-selected': {
-              color: theme.palette.mode === 'dark' ? theme.palette.warning.light : undefined,
+              color: theme.palette.primary.main,
+              fontWeight: 800,
             },
-            // asegurar contraste en el hover/selected para dark
             '& .MuiTab-root': {
               textTransform: 'none',
-              fontWeight: 700,
+              fontWeight: 600,
+              minHeight: 48,
             }
-          })}
+          }}
         >
-          <Tab label={<Badge color="primary" badgeContent={assignedTickets.length}>Asignados a mí</Badge>} value="assigned" />
-          <Tab label={<Badge color="secondary" badgeContent={createdTickets.length}>Creados por mí</Badge>} value="created" />
-          <Tab label={<Badge color="info" badgeContent={deptTickets.length}>Asignados a mi departamento</Badge>} value="dept" />
-          <Tab label={<Badge color="warning" badgeContent={deptCreatedTickets.length}>Creados por mi departamento</Badge>} value="deptCreated" />
-          {isAdmin && <Tab label={<Badge color="primary" badgeContent={allTickets.length}>Todos</Badge>} value="all" />}
+          <Tab label={<Badge color="primary" badgeContent={assignedTickets.length} max={99}>Asignados a mí</Badge>} value="assigned" />
+          <Tab label={<Badge color="secondary" badgeContent={createdTickets.length} max={99}>Creados por mí</Badge>} value="created" />
+          <Tab label={<Badge color="info" badgeContent={deptTickets.length} max={99}>Mi departamento</Badge>} value="dept" />
+          <Tab label={<Badge color="warning" badgeContent={deptCreatedTickets.length} max={99}>Creados dpto.</Badge>} value="deptCreated" />
+          {isAdmin && <Tab label={<Badge color="error" badgeContent={allTickets.length} max={99}>Todos</Badge>} value="all" />}
         </Tabs>
-      </Paper>
+      </GlassCard>
+
       {/* Selector de modo de vista: Panel o Tabla */}
-      <Paper sx={{ mb: 2, p: 1 }} elevation={1}>
+      <GlassCard sx={{ mb: 2, p: 1 }}>
         <Tabs
           value={viewMode}
           onChange={(e, val) => setViewMode(val)}
           variant="fullWidth"
-          sx={(theme) => ({
+          sx={{
             '& .MuiTabs-indicator': {
-              backgroundColor: theme.palette.mode === 'dark' ? theme.palette.warning.light : undefined,
+              backgroundColor: theme.palette.primary.main,
+              height: 3,
+              borderRadius: 2,
             },
             '& .MuiTab-root.Mui-selected': {
-              color: theme.palette.mode === 'dark' ? theme.palette.warning.light : undefined,
+              color: theme.palette.primary.main,
+              fontWeight: 800,
             },
             '& .MuiTab-root': {
               textTransform: 'none',
-              fontWeight: 700,
+              fontWeight: 600,
             }
-          })}
+          }}
         >
-          <Tab label="Vista de Panel" value="panel" />
-          <Tab label="Vista de Tabla" value="tabla" />
+          <Tab label="🎯 Vista de Panel" value="panel" />
+          <Tab label="📋 Vista de Tabla" value="tabla" />
         </Tabs>
-      </Paper>
+      </GlassCard>
+
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
           {error}
         </Alert>
       )}
       {success && (
-        <Alert severity="success" sx={{ mb: 2 }}>
+        <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>
           {success}
         </Alert>
       )}
+
       <Box sx={{ flex: '0 0 auto', width: '100%', maxWidth: '100vw' }}>
         {ticketsLoading ? (
-          <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh', width: '100%' }}>
-            <Paper elevation={3} sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, borderRadius: 3 }}>
-              <CircularProgress />
-              <Typography variant="body1">Cargando tickets, por favor espera...</Typography>
-            </Paper>
-          </Box>
+          <GlassCard sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minHeight: '40vh', justifyContent: 'center' }}>
+            <CircularProgress size={48} />
+            <Typography variant="h6" fontWeight={600}>Cargando tickets...</Typography>
+            <Typography variant="body2" color="text.secondary">Por favor espera</Typography>
+          </GlassCard>
         ) : (
           <>
           {/* Vista de Panel (Kanban) */}
@@ -843,9 +887,9 @@ export default function Tickets() {
               WebkitOverflowScrolling: 'touch',
             }}
           >
-          {ticketsPorEstado.map(col => (
+          {ticketsPorEstado.map((col, colIndex) => (
+            <Grow in timeout={500 + colIndex * 100} key={col.key}>
             <Box
-              key={col.key}
               sx={{
                 flex: { xs: '1 1 auto', sm: '1 1 0' },
                 minWidth: 0,
@@ -854,13 +898,83 @@ export default function Tickets() {
                 flexDirection: 'column',
               }}
             >
-              <Paper elevation={6} sx={{ p: { xs: 2, sm: 3 }, bgcolor: col.color, minHeight: { xs: 120, sm: 140 }, display: 'flex', flexDirection: 'column', gap: 2, borderRadius: 4, boxShadow: 8 }}>
-                <Typography variant="h6" sx={{ mb: 1, color: 'text.primary', fontWeight: 900, letterSpacing: 1, textAlign: 'center', textShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>{col.label}</Typography>
+              <Paper 
+                elevation={0} 
+                sx={{ 
+                  p: { xs: 2, sm: 3 }, 
+                  background: col.key === 'Abierto' 
+                    ? gradients.warning(theme) 
+                    : gradients.info(theme),
+                  minHeight: { xs: 120, sm: 140 }, 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: 2, 
+                  borderRadius: 4, 
+                  boxShadow: theme.shadows[8],
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Decoración de fondo */}
+                <Box sx={{ position: 'absolute', right: -20, top: -20, opacity: 0.1 }}>
+                  <ConfirmationNumberIcon sx={{ fontSize: 120 }} />
+                </Box>
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 1 }}>
+                  <Typography variant="h6" sx={{ color: '#fff', fontWeight: 800, letterSpacing: 0.5 }}>
+                    {col.label}
+                  </Typography>
+                  <Chip 
+                    label={col.tickets.length} 
+                    size="small" 
+                    sx={{ 
+                      bgcolor: alpha('#fff', 0.2), 
+                      color: '#fff', 
+                      fontWeight: 700,
+                      minWidth: 32,
+                    }} 
+                  />
+                </Box>
+                
                 {col.tickets.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ opacity: 0.85, textAlign: 'center' }}>Sin tickets</Typography>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    py: 4,
+                    zIndex: 1,
+                  }}>
+                    <Avatar sx={{ bgcolor: alpha('#fff', 0.2), width: 56, height: 56, mb: 1 }}>
+                      <ConfirmationNumberIcon sx={{ color: '#fff', fontSize: 28 }} />
+                    </Avatar>
+                    <Typography variant="body2" sx={{ color: alpha('#fff', 0.8) }}>
+                      Sin tickets
+                    </Typography>
+                  </Box>
                 ) : (
-                  col.tickets.map(ticket => (
-                    <Paper key={ticket.id} elevation={3} sx={{ p: 2, mb: 1.5, borderRadius: 3, bgcolor: 'background.paper', display: 'flex', flexDirection: 'column', gap: 1, boxShadow: 4, transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 10 } }}>
+                  col.tickets.map((ticket, ticketIndex) => (
+                    <Fade in timeout={300 + ticketIndex * 50} key={ticket.id}>
+                    <Paper 
+                      elevation={0} 
+                      sx={{ 
+                        p: 2, 
+                        borderRadius: 3, 
+                        bgcolor: alpha(theme.palette.background.paper, 0.95),
+                        backdropFilter: 'blur(10px)',
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        gap: 1, 
+                        border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                        transition: 'all 0.2s ease',
+                        cursor: 'pointer',
+                        '&:hover': { 
+                          transform: 'translateY(-2px)',
+                          boxShadow: theme.shadows[8],
+                        } 
+                      }}
+                      onClick={() => navigate(`/ticket/${ticket.id}`)}
+                    >
                       <Box
                         sx={{
                           display: 'flex',
@@ -878,24 +992,13 @@ export default function Tickets() {
                           sx={{ fontWeight: 700, maxWidth: '100%', '& .MuiChip-label': { whiteSpace: 'normal', lineHeight: 1.1 } }}
                         />
                         {ticket.subcategoria && (
-                          <Box
-                            sx={{
-                              bgcolor: 'secondary.light',
-                              color: 'secondary.contrastText',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              px: 1.2,
-                              py: 0.5,
-                              borderRadius: 2,
-                              maxWidth: '100%',
-                              lineHeight: 1.2,
-                              overflow: 'hidden',
-                              overflowWrap: 'anywhere',
-                              boxShadow: 1,
-                            }}
-                          >
-                            {ticket.subcategoria}
-                          </Box>
+                          <Chip
+                            label={ticket.subcategoria}
+                            color="secondary"
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontWeight: 600, maxWidth: '100%' }}
+                          />
                         )}
                         {/* SLA Label */}
                         {(() => {
@@ -988,13 +1091,15 @@ export default function Tickets() {
                         </Typography>
                       </Box>
                     </Paper>
+                    </Fade>
                   ))
                 )}
               </Paper>
             </Box>
+            </Grow>
           ))}
         </Box>
-          )}
+        )}
         {/* Vista de Tabla */}
         {viewMode === 'tabla' && (
         <Paper elevation={1} sx={{ mt: 2, width: '100%', maxWidth: '100vw', p: { xs: 1.5, sm: 2 }, borderRadius: 4, boxShadow: 1 }}>
@@ -1348,6 +1453,6 @@ export default function Tickets() {
         <Button onClick={handleDeleteTicket} color="error" variant="contained" disabled={deleting}>{deleting ? 'Eliminando...' : 'Eliminar'}</Button>
       </DialogActions>
     </Dialog>
-    </Box>
+    </ModuleContainer>
   );
 }

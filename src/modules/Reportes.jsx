@@ -964,11 +964,11 @@ export default function Reportes() {
       <PageHeader 
         title="Reportes" 
         subtitle="Analiza y exporta información de tickets"
-        icon={<AssessmentIcon />}
-        gradient={gradients.dark}
+        icon={AssessmentIcon}
+        gradient="dark"
       />
       
-      <SectionContainer title="Filtros" icon={<FilterListIcon />}>
+      <SectionContainer title="Filtros" icon={FilterListIcon}>
         <Grid container spacing={2} alignItems="center">
           <Grid gridColumn={{ xs: '1 / -1', sm: 'span 3', md: 'span 3' }} sx={{ minWidth: 220, maxWidth: 340, width: '100%' }}>
             <TextField
@@ -1032,7 +1032,7 @@ export default function Reportes() {
         </Grid>
       </SectionContainer>
       
-      <SectionContainer title="Tickets (vista tabla)" icon={<TableChartIcon />}>
+      <SectionContainer title="Tickets (vista tabla)" icon={TableChartIcon}>
         {loading ? (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
             <CircularProgress size={60} color="primary" />
