@@ -145,8 +145,9 @@ export default function PauseReasons() {
             startIcon={<AddIcon />}
             sx={{ 
               background: gradients.success, 
+              color: '#fff',
               px: 3,
-              '&:hover': { opacity: 0.9 }
+              '&:hover': { opacity: 0.9, color: '#fff' }
             }}
           >
             Agregar

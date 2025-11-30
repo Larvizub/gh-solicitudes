@@ -194,7 +194,7 @@ export default function CorporativoAccess() {
                 variant="contained" 
                 onClick={fetchSourceUsers} 
                 disabled={loadingSource}
-                sx={{ background: gradients.primary, '&:hover': { opacity: 0.9 } }}
+                sx={{ background: gradients.primary, color: '#fff', '&:hover': { opacity: 0.9, color: '#fff' } }}
               >
                 Cargar usuarios
               </Button>
@@ -255,7 +255,7 @@ export default function CorporativoAccess() {
                 variant="contained" 
                 disabled={selectedIds.size===0} 
                 onClick={authorizeSelected}
-                sx={{ background: gradients.success, '&:hover': { opacity: 0.9 } }}
+                sx={{ background: gradients.success, color: '#fff', '&:hover': { opacity: 0.9, color: '#fff' } }}
               >
                 Autorizar seleccionados
               </Button>

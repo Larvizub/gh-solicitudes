@@ -1646,7 +1646,7 @@ export default function TicketPage() {
           {/* Botón explícito para iniciar ticket (transaccional) */}
           {(!isNew && form.estado === 'Abierto' && canInitiate) && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Button variant="contained" color="primary" onClick={handleInitiate} disabled={saving} sx={{ textTransform: 'none', fontWeight: 700 }}>
+              <Button variant="contained" color="primary" onClick={handleInitiate} disabled={saving} sx={{ textTransform: 'none', fontWeight: 700, color: '#fff', '&:hover': { color: '#fff' } }}>
                 Iniciar
               </Button>
             </Box>
@@ -1905,7 +1905,9 @@ export default function TicketPage() {
                         textTransform: 'none',
                         fontWeight: 600,
                         px: 3,
+                        color: '#fff',
                         '&:hover': {
+                          color: '#fff',
                           backgroundColor: theme => theme.palette.warning.dark,
                         }
                       }}
@@ -1944,7 +1946,9 @@ export default function TicketPage() {
                         textTransform: 'none',
                         fontWeight: 600,
                         px: 3,
+                        color: '#fff',
                         '&:hover': {
+                          color: '#fff',
                           backgroundColor: theme => theme.palette.success.dark,
                         }
                       }}
@@ -2057,8 +2061,10 @@ export default function TicketPage() {
                     fontWeight: 700,
                     px: 3,
                     py: 1.5,
+                    color: '#fff',
                     boxShadow: theme => theme.shadows[4],
                     '&:hover': {
+                      color: '#fff',
                       boxShadow: theme => theme.shadows[6],
                     }
                   }}
@@ -2095,7 +2101,7 @@ export default function TicketPage() {
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting} sx={{ borderRadius: 2 }}>Cancelar</Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleting} sx={{ borderRadius: 2 }}>{deleting ? 'Eliminando...' : 'Eliminar'}</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleting} sx={{ borderRadius: 2, color: '#fff', '&:hover': { color: '#fff' } }}>{deleting ? 'Eliminando...' : 'Eliminar'}</Button>
         </DialogActions>
       </Dialog>
     </ModuleContainer>

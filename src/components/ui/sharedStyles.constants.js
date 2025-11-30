@@ -76,3 +76,47 @@ export const dialogStyles = {
     bgcolor: 'background.default',
   },
 };
+
+// Estilos para botones con gradiente - asegura texto blanco en modo oscuro
+export const buttonStyles = {
+  primary: (theme) => ({
+    background: typeof gradients.primary === 'function' ? gradients.primary(theme) : gradients.primary,
+    color: '#ffffff',
+    '&:hover': {
+      color: '#ffffff',
+      opacity: 0.9,
+    },
+  }),
+  success: (theme) => ({
+    background: typeof gradients.success === 'function' ? gradients.success(theme) : gradients.success,
+    color: '#ffffff',
+    '&:hover': {
+      color: '#ffffff',
+      opacity: 0.9,
+    },
+  }),
+  warning: (theme) => ({
+    background: typeof gradients.warning === 'function' ? gradients.warning(theme) : gradients.warning,
+    color: '#ffffff',
+    '&:hover': {
+      color: '#ffffff',
+      opacity: 0.9,
+    },
+  }),
+  error: (theme) => ({
+    background: typeof gradients.error === 'function' ? gradients.error(theme) : gradients.error,
+    color: '#ffffff',
+    '&:hover': {
+      color: '#ffffff',
+      opacity: 0.9,
+    },
+  }),
+  secondary: (theme) => ({
+    background: typeof gradients.secondary === 'function' ? gradients.secondary(theme) : gradients.secondary,
+    color: '#ffffff',
+    '&:hover': {
+      color: '#ffffff',
+      opacity: 0.9,
+    },
+  }),
+};

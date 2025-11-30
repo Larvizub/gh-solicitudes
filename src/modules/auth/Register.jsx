@@ -305,7 +305,7 @@ export default function Register() {
             fullWidth
             variant="contained"
             color="primary"
-            sx={{ mt: 2 }}
+            sx={{ mt: 2, color: '#fff', '&:hover': { color: '#fff' } }}
             type="submit"
             disabled={loading}
           >

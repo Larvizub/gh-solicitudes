@@ -1008,9 +1008,10 @@ export default function Reportes() {
               onClick={handleExportExcel} 
               sx={{ 
                 minWidth: 140, 
+                color: '#fff',
                 background: gradients.success,
                 fontWeight: 600,
-                '&:hover': { opacity: 0.9 }
+                '&:hover': { opacity: 0.9, color: '#fff' }
               }}
             >
               Exportar a Excel
@@ -1021,9 +1022,10 @@ export default function Reportes() {
               disabled={exportandoPdf} 
               sx={{ 
                 minWidth: 140, 
+                color: '#fff',
                 background: gradients.error,
                 fontWeight: 600,
-                '&:hover': { opacity: 0.9 }
+                '&:hover': { opacity: 0.9, color: '#fff' }
               }}
             >
               {exportandoPdf ? 'Generando...' : 'Exportar a PDF'}

@@ -37,28 +37,35 @@ export const getTheme = (mode = 'light') =>
       },
       MuiButton: {
         styleOverrides: {
+          root: {
+            // Asegurar texto blanco en botones con gradientes/fondos oscuros
+            '&.MuiButton-contained': {
+              color: '#ffffff',
+            },
+          },
           containedPrimary: {
-            color: heroicaPalette.primary.contrastText,
-            ...(mode === 'dark'
-              ? {
-                  backgroundColor: '#ffffff',
-                  color: '#000000',
-                }
-              : {}),
+            color: '#ffffff',
+            '&:hover': {
+              color: '#ffffff',
+            },
+          },
+          containedSecondary: {
+            color: '#ffffff',
+            '&:hover': {
+              color: '#ffffff',
+            },
           },
           contained: {
-            ...(mode === 'dark'
-              ? {
-                  backgroundColor: '#ffffff',
-                  color: '#000000',
-                }
-              : {}),
+            color: '#ffffff',
           },
           outlined: {
             ...(mode === 'dark'
               ? {
-                  borderColor: 'rgba(255,255,255,0.12)',
+                  borderColor: 'rgba(255,255,255,0.23)',
                   color: '#e6eef0',
+                  '&:hover': {
+                    borderColor: 'rgba(255,255,255,0.5)',
+                  },
                 }
               : {}),
           },

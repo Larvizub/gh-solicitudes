@@ -432,7 +432,7 @@ export default function Sla() {
                             <TableCell><TextField size="small" type="number" defaultValue={media} inputProps={{ min:0 }} sx={{ width: 80 }} id={`media-${depId}-${tipoId}-${subId}`} /></TableCell>
                             <TableCell><TextField size="small" type="number" defaultValue={baja} inputProps={{ min:0 }} sx={{ width: 80 }} id={`baja-${depId}-${tipoId}-${subId}`} /></TableCell>
                             <TableCell align="right">
-                              <Button size="small" variant="contained" sx={{ fontWeight: 600 }} onClick={async () => {
+                              <Button size="small" variant="contained" sx={{ fontWeight: 600, color: '#fff', '&:hover': { color: '#fff' } }} onClick={async () => {
                                 const a = Number(document.getElementById(`alta-${depId}-${tipoId}-${subId}`)?.value) || null;
                                 const m = Number(document.getElementById(`media-${depId}-${tipoId}-${subId}`)?.value) || null;
                                 const b = Number(document.getElementById(`baja-${depId}-${tipoId}-${subId}`)?.value) || null;
@@ -469,7 +469,7 @@ export default function Sla() {
                           <TextField size="small" type="number" defaultValue={alta} inputProps={{ min:0 }} sx={{ width: '100%' }} id={`alta-${depId}-${tipoId}-${subId}-mobile`} label="Alta (h)" />
                           <TextField size="small" type="number" defaultValue={media} inputProps={{ min:0 }} sx={{ width: '100%' }} id={`media-${depId}-${tipoId}-${subId}-mobile`} label="Media (h)" />
                           <TextField size="small" type="number" defaultValue={baja} inputProps={{ min:0 }} sx={{ width: '100%' }} id={`baja-${depId}-${tipoId}-${subId}-mobile`} label="Baja (h)" />
-                          <Button variant="contained" fullWidth sx={{ mt: 1, fontWeight: 600 }} onClick={async () => {
+                          <Button variant="contained" fullWidth sx={{ mt: 1, fontWeight: 600, color: '#fff', '&:hover': { color: '#fff' } }} onClick={async () => {
                             const a = Number(document.getElementById(`alta-${depId}-${tipoId}-${subId}-mobile` )?.value) || null;
                             const m = Number(document.getElementById(`media-${depId}-${tipoId}-${subId}-mobile` )?.value) || null;
                             const b = Number(document.getElementById(`baja-${depId}-${tipoId}-${subId}-mobile` )?.value) || null;
@@ -491,7 +491,7 @@ export default function Sla() {
                     onClick={runScan} 
                     disabled={loading || scanning}
                     startIcon={scanning ? <CircularProgress size={18} /> : <PlayArrowIcon />}
-                    sx={{ fontWeight: 700 }}
+                    sx={{ fontWeight: 700, color: '#fff', '&:hover': { color: '#fff' } }}
                   >
                     {scanning ? 'Escaneando...' : 'Escanear Cumplimiento'}
                   </Button>
@@ -576,8 +576,8 @@ export default function Sla() {
           </Box>
         </DialogContent>
         <DialogActions sx={dialogStyles.actions}>
-          <Button onClick={() => setEditDialog({ open: false, departamento: null, prioridad: 'Alta', value: '' })} variant="contained" color="error" sx={{ fontWeight: 600 }}>Cancelar</Button>
-          <Button variant="contained" onClick={saveConfig} sx={{ fontWeight: 600 }}>Guardar</Button>
+          <Button onClick={() => setEditDialog({ open: false, departamento: null, prioridad: 'Alta', value: '' })} variant="contained" color="error" sx={{ fontWeight: 600, color: '#fff', '&:hover': { color: '#fff' } }}>Cancelar</Button>
+          <Button variant="contained" onClick={saveConfig} sx={{ fontWeight: 600, color: '#fff', '&:hover': { color: '#fff' } }}>Guardar</Button>
         </DialogActions>
       </Dialog>
       <Dialog 
@@ -595,8 +595,8 @@ export default function Sla() {
           </Box>
         </DialogContent>
         <DialogActions sx={dialogStyles.actions}>
-          <Button onClick={() => setSubcatDialog({ open: false, depId: null, tipoId: null, subId: null, prioridad: 'Alta', value: '' })} variant="contained" color="error" sx={{ fontWeight: 600 }}>Cancelar</Button>
-          <Button variant="contained" onClick={saveSubcatSla} sx={{ fontWeight: 600 }}>Guardar</Button>
+          <Button onClick={() => setSubcatDialog({ open: false, depId: null, tipoId: null, subId: null, prioridad: 'Alta', value: '' })} variant="contained" color="error" sx={{ fontWeight: 600, color: '#fff', '&:hover': { color: '#fff' } }}>Cancelar</Button>
+          <Button variant="contained" onClick={saveSubcatSla} sx={{ fontWeight: 600, color: '#fff', '&:hover': { color: '#fff' } }}>Guardar</Button>
         </DialogActions>
       </Dialog>
     </ModuleContainer>

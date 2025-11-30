@@ -108,7 +108,8 @@ export default function ConfigCorreo() {
               startIcon={<AddIcon />}
               sx={{ 
                 background: gradients.success,
-                '&:hover': { opacity: 0.9 }
+                color: '#fff',
+                '&:hover': { opacity: 0.9, color: '#fff' }
               }}
             >
               Agregar
@@ -141,8 +142,9 @@ export default function ConfigCorreo() {
             startIcon={<SaveIcon />}
             sx={{ 
               background: gradients.primary,
+              color: '#fff',
               px: 4,
-              '&:hover': { opacity: 0.9 }
+              '&:hover': { opacity: 0.9, color: '#fff' }
             }}
           >
             Guardar

@@ -22,7 +22,7 @@ export default class ErrorBoundary extends React.Component {
         <Box sx={{ minHeight: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 3 }}>
           <Typography variant="h6" color="error" sx={{ mb: 2 }}>Ocurrió un error cargando esta sección.</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{String(this.state.error || '')}</Typography>
-          <Button variant="contained" onClick={this.handleReload}>Reintentar</Button>
+          <Button variant="contained" onClick={this.handleReload} sx={{ color: '#fff', '&:hover': { color: '#fff' } }}>Reintentar</Button>
         </Box>
       );
     }

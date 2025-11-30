@@ -67,7 +67,7 @@ function NotificationProvider({ children }) {
           <Alert severity={modalSeverity}>{modalMessage}</Alert>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleModalClose} variant="contained">Cerrar</Button>
+          <Button onClick={handleModalClose} variant="contained" sx={{ color: '#fff', '&:hover': { color: '#fff' } }}>Cerrar</Button>
         </DialogActions>
       </Dialog>
 

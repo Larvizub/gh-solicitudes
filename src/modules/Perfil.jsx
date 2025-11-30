@@ -367,7 +367,7 @@ export default function Perfil() {
           </TextField>
         </DialogContent>
         <DialogActions sx={dialogStyles.actions}>
-          <Button disabled={!selectedDeptForDialog} onClick={handleConfirmDept} variant="contained" sx={{ fontWeight: 600 }}>Confirmar</Button>
+          <Button disabled={!selectedDeptForDialog} onClick={handleConfirmDept} variant="contained" sx={{ fontWeight: 600, color: '#fff', '&:hover': { color: '#fff' } }}>Confirmar</Button>
         </DialogActions>
       </Dialog>
       
@@ -599,8 +599,9 @@ export default function Perfil() {
                 py: 1.5, 
                 fontWeight: 700, 
                 fontSize: 16, 
+                color: '#fff',
                 background: gradients.primary,
-                '&:hover': { opacity: 0.9 }
+                '&:hover': { opacity: 0.9, color: '#fff' }
               }} 
               type="submit" 
               disabled={loading} 

@@ -312,10 +312,10 @@ export default function ConfigTickets() {
           />
         </DialogContent>
         <DialogActions sx={dialogStyles.actions}>
-          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error" sx={{ fontWeight: 600 }}>
+          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error" sx={{ fontWeight: 600, color: '#fff', '&:hover': { color: '#fff' } }}>
             Cancelar
           </Button>
-          <Button onClick={handleSaveTipo} variant="contained" sx={{ fontWeight: 600 }}>
+          <Button onClick={handleSaveTipo} variant="contained" sx={{ fontWeight: 600, color: '#fff', '&:hover': { color: '#fff' } }}>
             Guardar
           </Button>
         </DialogActions>

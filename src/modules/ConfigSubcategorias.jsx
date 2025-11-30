@@ -260,7 +260,7 @@ export default function ConfigSubcategorias() {
         </DialogContent>
         <DialogActions sx={dialogStyles.actions}>
           <Button onClick={() => setOpenDialog(false)} variant="outlined" color="inherit">Cancelar</Button>
-          <Button variant="contained" onClick={handleSave} sx={{ background: gradients.primary }}>Guardar</Button>
+          <Button variant="contained" onClick={handleSave} sx={{ background: gradients.primary, color: '#fff', '&:hover': { color: '#fff' } }}>Guardar</Button>
         </DialogActions>
       </Dialog>
     </ModuleContainer>

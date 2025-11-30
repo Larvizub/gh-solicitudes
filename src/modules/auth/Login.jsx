@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Paper, Typography, TextField, Button, Link, InputAdornment, Alert, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { Box, Typography, TextField, Button, Link, InputAdornment, Alert, Select, MenuItem, FormControl, InputLabel, IconButton, Divider, Fade, Grow } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
-import { Email, Lock, Microsoft } from '@mui/icons-material';
+import { Email, Lock, Microsoft, Visibility, VisibilityOff, LoginOutlined } from '@mui/icons-material';
 import { signInWithEmailAndPassword, OAuthProvider, signInWithPopup, fetchSignInMethodsForEmail, signOut } from 'firebase/auth';
 import { auth } from '../../firebase/firebaseConfig';
 import { useDb } from '../../context/DbContext';
@@ -10,14 +10,12 @@ import { BRAND_LOGO_ALT } from '../../config/branding';
 import { getDbForRecinto } from '../../firebase/multiDb';
 import { ref, update } from 'firebase/database';
 
-
- // Provider de Microsoft para Firebase Auth
+// Provider de Microsoft para Firebase Auth
 const msProvider = new OAuthProvider('microsoft.com');
-// Configurar para aceptar cualquier cuenta Microsoft (tenant + MSA personales)
 msProvider.addScope('user.read');
 msProvider.setCustomParameters({
   prompt: 'select_account',
-  tenant: 'common' // Permite cuentas de cualquier directorio y cuentas personales
+  tenant: 'common'
 });
 export default function Login() {
   const navigate = useNavigate();
@@ -384,62 +382,291 @@ export default function Login() {
   };
 
   return (
-    <Box sx={{ position: 'fixed', inset: 0, minHeight: '100vh', minWidth: '100vw', bgcolor: 'background.default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Paper elevation={3} sx={{ p: 4, maxWidth: 400, width: '100%' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-          <img src="https://costaricacc.com/cccr/Logoheroica.png" alt={BRAND_LOGO_ALT} style={{ height: 60, filter: theme && theme.palette && theme.palette.mode === 'dark' ? 'brightness(0) invert(1)' : 'none' }} />
-        </Box>
-        <Typography variant="h5" align="center" gutterBottom>Iniciar Sesión</Typography>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+    <Box sx={{
+      position: 'fixed',
+      inset: 0,
+      minHeight: '100vh',
+      minWidth: '100vw',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 50%, ${theme.palette.secondary.main} 100%)`,
+      overflow: 'hidden',
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.1) 0%, transparent 50%), radial-gradient(circle at 70% 80%, rgba(255,255,255,0.08) 0%, transparent 40%)',
+        pointerEvents: 'none',
+      }
+    }}>
+      <Fade in={true} timeout={800}>
+        <Box sx={{
+          background: alpha(theme.palette.background.paper, 0.9),
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRadius: 4,
+          border: `1px solid ${alpha(theme.palette.divider, 0.15)}`,
+          boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.25)}`,
+          p: { xs: 3, sm: 5 },
+          width: '100%',
+          maxWidth: 420,
+          mx: 2,
+        }}>
+          {/* Logo */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+            <Grow in={true} timeout={1000}>
+              <Box
+                component="img"
+                src="https://costaricacc.com/cccr/Logoheroica.png"
+                alt={BRAND_LOGO_ALT}
+                sx={{
+                  height: 70,
+                  filter: theme.palette.mode === 'dark' ? 'brightness(0) invert(1)' : 'none',
+                  transition: 'transform 0.3s ease',
+                  '&:hover': { transform: 'scale(1.05)' }
+                }}
+              />
+            </Grow>
+          </Box>
 
-        <FormControl fullWidth margin="normal">
-          <InputLabel id="recinto-label">Recinto</InputLabel>
-          <Select labelId="recinto-label" value={selectedRecinto} label="Recinto" onChange={(e) => setSelectedRecinto(e.target.value)}>
-            {RECINTOS.map(r => (<MenuItem key={r.key} value={r.key}>{r.label}</MenuItem>))}
-          </Select>
-        </FormControl>
-
-        <Button fullWidth variant="contained" color="primary" sx={{ mt: 2 }} startIcon={<Microsoft />} onClick={handleMicrosoftLogin} disabled={loading}>Iniciar con Microsoft</Button>
-
-        <Typography variant="body2" align="center" sx={{ mt: 2 }}>o</Typography>
-
-        <form onSubmit={handleLogin}>
-          <TextField fullWidth margin="normal" label="Correo" type="email" value={email} onChange={e => setEmail(e.target.value)} InputProps={{ startAdornment: (<InputAdornment position="start"><Email sx={{ mr: 1 }} /></InputAdornment>) }} required />
-          <TextField
-            fullWidth
-            margin="normal"
-            label="Contraseña"
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Lock sx={{ mr: 1 }} />
-                </InputAdornment>
-              ),
-              endAdornment: (
-                <InputAdornment position="end">
-                  <Button
-                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    tabIndex={-1}
-                    sx={{ minWidth: 0, p: 0, color: 'inherit' }}
-                  >
-                    {showPassword ? '🙈' : '👁️'}
-                  </Button>
-                </InputAdornment>
-              )
+          {/* Title */}
+          <Typography
+            variant="h4"
+            align="center"
+            gutterBottom
+            sx={{
+              fontWeight: 700,
+              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              mb: 1
             }}
-            required
-          />
-          <Button fullWidth variant="contained" color="primary" sx={{ mt: 2 }} type="submit" disabled={loading}>Ingresar</Button>
-        </form>
+          >
+            Bienvenido
+          </Typography>
+          <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
+            Inicia sesión para continuar
+          </Typography>
 
-        <Box sx={{ mt: 2, textAlign: 'center' }}>
-          <Link href="#" onClick={() => navigate('/register')} sx={{ color: theme && theme.palette && theme.palette.mode === 'dark' ? '#fff' : 'inherit' }}>¿No tienes cuenta? Regístrate</Link>
+          {/* Error Alert */}
+          {error && (
+            <Fade in={true}>
+              <Alert
+                severity="error"
+                sx={{
+                  mb: 2,
+                  borderRadius: 2,
+                  '& .MuiAlert-icon': { alignItems: 'center' }
+                }}
+              >
+                {error}
+              </Alert>
+            </Fade>
+          )}
+
+          {/* Recinto Selector */}
+          <FormControl
+            fullWidth
+            sx={{
+              mb: 2,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                transition: 'all 0.3s ease',
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: theme.palette.primary.main,
+                },
+                '&.Mui-focused': {
+                  boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.15)}`,
+                }
+              }
+            }}
+          >
+            <InputLabel id="recinto-label">Recinto</InputLabel>
+            <Select
+              labelId="recinto-label"
+              value={selectedRecinto}
+              label="Recinto"
+              onChange={(e) => setSelectedRecinto(e.target.value)}
+            >
+              {RECINTOS.map(r => (
+                <MenuItem key={r.key} value={r.key}>{r.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {/* Microsoft Login Button */}
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={handleMicrosoftLogin}
+            disabled={loading}
+            startIcon={<Microsoft />}
+            sx={{
+              py: 1.5,
+              borderRadius: 2,
+              fontWeight: 600,
+              textTransform: 'none',
+              fontSize: '1rem',
+              background: alpha(theme.palette.background.default, 0.8),
+              color: theme.palette.text.primary,
+              border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+              boxShadow: `0 2px 8px ${alpha(theme.palette.common.black, 0.1)}`,
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: `0 4px 12px ${alpha(theme.palette.common.black, 0.15)}`,
+                background: alpha(theme.palette.background.paper, 1),
+                borderColor: theme.palette.primary.main,
+              },
+              '&:disabled': {
+                transform: 'none',
+                boxShadow: 'none',
+              }
+            }}
+          >
+            Iniciar con Microsoft
+          </Button>
+
+          {/* Divider */}
+          <Divider sx={{ my: 3 }}>
+            <Typography variant="body2" color="text.secondary">
+              o continúa con email
+            </Typography>
+          </Divider>
+
+          {/* Email/Password Form */}
+          <form onSubmit={handleLogin}>
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Correo"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  transition: 'all 0.3s ease',
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  '&.Mui-focused': {
+                    boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.15)}`,
+                  }
+                }
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Email color="action" />
+                  </InputAdornment>
+                )
+              }}
+            />
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Contraseña"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  transition: 'all 0.3s ease',
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  '&.Mui-focused': {
+                    boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.15)}`,
+                  }
+                }
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Lock color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      edge="end"
+                      size="small"
+                    >
+                      {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                )
+              }}
+            />
+            <Button
+              fullWidth
+              variant="contained"
+              type="submit"
+              disabled={loading}
+              startIcon={<LoginOutlined />}
+              sx={{
+                mt: 3,
+                py: 1.5,
+                borderRadius: 2,
+                fontWeight: 600,
+                textTransform: 'none',
+                fontSize: '1rem',
+                color: '#ffffff',
+                background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`,
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  color: '#ffffff',
+                  transform: 'translateY(-2px)',
+                  boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.5)}`,
+                  background: `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
+                },
+                '&:disabled': {
+                  color: 'rgba(255,255,255,0.6)',
+                  transform: 'none',
+                  boxShadow: 'none',
+                }
+              }}
+            >
+              {loading ? 'Ingresando...' : 'Ingresar'}
+            </Button>
+          </form>
+
+          {/* Register Link */}
+          <Box sx={{ mt: 3, textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary">
+              ¿No tienes cuenta?{' '}
+              <Link
+                href="#"
+                onClick={(e) => { e.preventDefault(); navigate('/register'); }}
+                sx={{
+                  color: theme.palette.primary.main,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    color: theme.palette.primary.dark,
+                    textDecoration: 'underline',
+                  }
+                }}
+              >
+                Regístrate
+              </Link>
+            </Typography>
+          </Box>
         </Box>
-      </Paper>
+      </Fade>
     </Box>
   );
 }

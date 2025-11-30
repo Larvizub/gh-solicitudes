@@ -1431,11 +1431,11 @@ export default function Tickets() {
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 2, bgcolor: 'background.default', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
-          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error" sx={{ fontWeight: 700 }}>Cancelar</Button>
+          <Button onClick={() => setOpenDialog(false)} variant="contained" color="error" sx={{ fontWeight: 700, color: '#fff', '&:hover': { color: '#fff' } }}>Cancelar</Button>
           <Button 
             onClick={handleSaveTicket} 
             variant="contained" 
-            sx={{ fontWeight: 700 }}
+            sx={{ fontWeight: 700, color: '#fff', '&:hover': { color: '#fff' } }}
             startIcon={editTicket ? <UpdateIcon /> : <SaveIcon />}
           >
             {editTicket ? "Actualizar" : "Guardar"}
@@ -1450,7 +1450,7 @@ export default function Tickets() {
       </DialogContent>
       <DialogActions>
         <Button onClick={() => setDeleteDialog({ open: false, ticketId: null })} disabled={deleting}>Cancelar</Button>
-        <Button onClick={handleDeleteTicket} color="error" variant="contained" disabled={deleting}>{deleting ? 'Eliminando...' : 'Eliminar'}</Button>
+        <Button onClick={handleDeleteTicket} color="error" variant="contained" disabled={deleting} sx={{ color: '#fff', '&:hover': { color: '#fff' } }}>{deleting ? 'Eliminando...' : 'Eliminar'}</Button>
       </DialogActions>
     </Dialog>
     </ModuleContainer>
