@@ -142,7 +142,7 @@ export default function ConfigTickets() {
       });
       setSuccess('Tipo eliminado');
       setError('');
-    } catch (e) {
+    } catch {
         // removed console.error for delete errors
       setError("Error al eliminar");
     }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { alpha, useTheme } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { ReportesPieChart, ReportesBarChart, ReportesLineChart, ReportesAreaChart, ReportesHorizontalBarChart } from './ReportesCharts';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -533,89 +533,6 @@ export default function Reportes() {
       console.log('Reportes debug - fecha resuelta:', resolveDateFromRow(tickets[0]));
     }
   }, [tickets, departamentos, resolveDepartmentName, resolveDateFromRow]);
-
-
-
-  // Columnas para DataGrid
-  const columns = [
-    { field: 'departamento', headerName: 'Departamento', width: 160, renderCell: (params) => {
-      return <span>{resolveDepartmentName(params?.row?.departamento)}</span>;
-    } },
-    { field: 'tipo', headerName: 'Categoría', width: 120 },
-    { field: 'estado', headerName: 'Estado', width: 120, renderCell: (params) => (
-      <Chip label={params.value} size="small" color={params.value === 'Abierto' ? 'warning' : params.value === 'En Proceso' ? 'info' : 'success'} />
-    ) },
-  { field: 'slaRestante', headerName: 'Vencimiento', width: 140, renderCell: (params) => {
-      const slaInfo = calculateSlaForTicket(params.row);
-      if (!slaInfo) return <span>-</span>;
-      
-  const { remainingHours, isExpired, overdueHours } = slaInfo;
-      
-      if (isExpired) {
-  const totalHours = Math.round((overdueHours || Math.abs(remainingHours)) * 10) / 10; // Redondear a 1 decimal
-        return (
-          <Chip 
-            label={`Vencido: ${totalHours}h`} 
-            color="error" 
-            size="small" 
-            variant="filled"
-          />
-        );
-      } else {
-  const safeRemaining = remainingHours < 0 ? 0 : remainingHours;
-  const totalHours = Math.round(safeRemaining * 10) / 10; // Redondear a 1 decimal
-  const isUrgent = safeRemaining <= 12;
-        return (
-          <Chip 
-            label={`${totalHours}h`} 
-            color={isUrgent ? 'warning' : 'success'} 
-            size="small" 
-            variant={isUrgent ? 'filled' : 'outlined'}
-          />
-        );
-      }
-    } },
-  { field: 'usuario', headerName: 'Usuario', width: 160 },
-  { field: 'usuarioAsignado', headerName: 'Usuario Asignado', width: 180, renderCell: (params) => <span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{params.row?.usuarioAsignado || ''}</span> },
-    { field: 'fecha', headerName: 'Fecha', width: 180, renderCell: (params) => {
-      return <span>{resolveDateFromRow(params?.row)}</span>;
-    } },
-    { field: 'tiempoLaboralMs', headerName: 'Horas cierre (h)', width: 160, renderCell: (params) => {
-      // Usar duración de resolución en horas (horas laborales descontando pausas)
-      const row = params.row || {};
-      const ms = computeTicketResolutionMs(row);
-      const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
-      // Calcular SLA de la subcategoría para decidir estilo (vencido = isExpired)
-      const slaInfo = calculateSlaForTicket(row);
-      let isExpired = slaInfo?.isExpired;
-      // Si el ticket está cerrado, calculateSlaForTicket puede devolver null; en ese caso obtener slaHours y comparar con hours
-      if (!isExpired) {
-        try {
-          const slaHours = slaInfo?.slaHours ?? computeSlaHoursForTicket(row);
-          if (slaHours !== null && slaHours !== undefined && hours !== null) {
-            if (hours > Number(slaHours)) isExpired = true;
-          }
-        } catch { /* noop */ }
-      }
-      if (hours === null) return <span />;
-      return (
-        <Chip
-          label={`${hours}h`}
-          size="small"
-          color={isExpired ? undefined : (hours <= 12 ? 'warning' : 'success')}
-          variant={isExpired ? 'filled' : (hours <= 12 ? 'filled' : 'outlined')}
-          sx={isExpired ? { backgroundColor: theme.palette.error.main, color: '#fff', fontWeight: 700 } : undefined}
-        />
-      );
-    } },
-    { field: 'adjuntoUrl', headerName: 'Adjunto', width: 120, renderCell: (params) => {
-      const row = params?.row || {};
-      const url = params.value || row.adjuntoUrl || row.adjunto?.url || (Array.isArray(row.adjuntos) && row.adjuntos[0]?.url) || row.adjunto;
-      return url ? <Button href={url} target="_blank" size="small" color="info" sx={{ fontWeight: 700 }}>Ver</Button> : '';
-    } },
-  { field: 'asignadosTexto', headerName: 'Reasignados', width: 220, renderCell: (params) => <span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{params.row?.asignadosTexto || ''}</span> },
-    { field: 'lastReassignAt', headerName: 'Última Reasignación', width: 180 },
-  ];
 
   // Pre-calcular campos derivados para evitar errores en valueGetter cuando params es indefinido
   // Ordenar tickets por fecha de creación (más recientes primero)

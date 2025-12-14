@@ -41,7 +41,7 @@ import {
   GlassCard, 
   ModuleContainer, 
 } from '../components/ui/SharedStyles';
-import { tableStyles, dialogStyles, gradients } from '../components/ui/sharedStyles.constants';
+import { tableStyles, dialogStyles } from '../components/ui/sharedStyles.constants';
 
 export default function Usuarios() {
   const { userData } = useAuth();
@@ -187,31 +187,6 @@ export default function Usuarios() {
       setError('Error al eliminar');
     }
   };
-
-  // Columnas para DataGrid
-  const columns = [
-    { field: 'nombre', headerName: 'Nombre', flex: 1 },
-    { field: 'apellido', headerName: 'Apellido', flex: 1 },
-    { field: 'email', headerName: 'Correo', flex: 1 },
-    { field: 'departamento', headerName: 'Departamento', flex: 1 },
-    { field: 'rol', headerName: 'Rol', flex: 1 },
-    userData?.rol === 'admin' && {
-      field: 'acciones',
-      headerName: 'Acciones',
-      width: 120,
-      sortable: false,
-      renderCell: (params) => (
-        <Box>
-          <IconButton onClick={() => handleOpenDialog(params.row)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
-            <EditIcon />
-          </IconButton>
-          <IconButton onClick={() => handleDelete(params.row.id)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
-            <DeleteIcon />
-          </IconButton>
-        </Box>
-      ),
-    },
-  ].filter(Boolean);
 
   // Filtrar usuarios por nombre o apellido (busqueda)
   const filteredUsuarios = React.useMemo(() => {

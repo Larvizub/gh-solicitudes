@@ -119,7 +119,7 @@ export default function Sla() {
   setTipos({});
   setSubcats({});
   setSlaSubcats({});
-      } catch (e) {
+      } catch {
         // removed console.error while loading SLA data
       } finally {
         setLoading(false);
@@ -142,7 +142,7 @@ export default function Sla() {
       setTipos(prev => ({ ...prev, [depId]: tiposSnap.exists() ? tiposSnap.val() : {} }));
       setSubcats(prev => ({ ...prev, [depId]: subSnap.exists() ? subSnap.val() : {} }));
       setSlaSubcats(prev => ({ ...prev, [depId]: slaSubSnap.exists() ? slaSubSnap.val() : {} }));
-    } catch (e) {
+    } catch {
       // removed console.error while loading department data
     }
   }, [ctxDb, recinto, tipos]);
@@ -213,7 +213,7 @@ export default function Sla() {
         }
       });
       setScanResult({ total, within, breaches: breaches.sort((a,b) => b.elapsed - a.elapsed), scanned: true });
-    } catch (e) {
+    } catch {
       // removed console.error during SLA scan
       setError('Error al escanear cumplimiento SLA');
     } finally {
@@ -240,7 +240,7 @@ export default function Sla() {
       // actualizar local
       setConfigs(prev => ({ ...prev, [departamento]: next }));
       setSuccess('Configuración SLA guardada exitosamente');
-    } catch (e) {
+    } catch {
       // removed console.error while saving SLA
       setError('Error al guardar la configuración SLA');
     } finally {
@@ -271,7 +271,7 @@ export default function Sla() {
         return copy;
       });
       setSuccess('SLA de subcategoría guardado exitosamente');
-    } catch (e) {
+    } catch {
       // suppressed console.error while saving subcategory SLA
       setError('Error al guardar el SLA de subcategoría');
     }
@@ -313,7 +313,7 @@ export default function Sla() {
         return copy;
       });
       setSuccess('SLA editado exitosamente');
-    } catch (e) {
+    } catch {
       // suppressed console.error while saving a subcategory SLA
       setError('Error al guardar el SLA');
     } finally {

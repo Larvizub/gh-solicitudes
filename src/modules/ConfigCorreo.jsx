@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Typography, TextField, Button, Chip, MenuItem } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
+import { Box, TextField, Button, Chip, MenuItem } from '@mui/material';
+
 import EmailIcon from '@mui/icons-material/Email';
 import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/Save';
@@ -13,7 +13,6 @@ import useNotification from '../context/useNotification';
 
 export default function ConfigCorreo() {
   const { db: ctxDb, recinto } = useDb();
-  const theme = useTheme();
   const { notify } = useNotification();
   const [departamentos, setDepartamentos] = useState([]);
   const [selectedDep, setSelectedDep] = useState('');

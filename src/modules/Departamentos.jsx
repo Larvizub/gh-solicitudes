@@ -145,33 +145,6 @@ export default function Departamentos() {
     }
   };
 
-  // Columnas para DataGrid
-  const columns = [
-    { field: "nombre", headerName: "Nombre", flex: 1, minWidth: 200 },
-    {
-      field: "acciones",
-      headerName: "Acciones",
-      width: 120,
-      sortable: false,
-      renderCell: (params) => (
-        <Box>
-          <IconButton
-            onClick={() => handleOpenDialog(params.row)}
-            sx={{ color: theme.palette.primary.main }}
-          >
-            <EditIcon />
-          </IconButton>
-          <IconButton 
-            onClick={() => handleDelete(params.row.id)} 
-            sx={{ color: theme.palette.error.main }}
-          >
-            <DeleteIcon />
-          </IconButton>
-        </Box>
-      ),
-    },
-  ];
-
   return (
     <ModuleContainer maxWidth="900px">
       <PageHeader

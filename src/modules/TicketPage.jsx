@@ -299,7 +299,7 @@ export default function TicketPage() {
           setOriginalEstado(null);
           setCommentsArr([]);
         }
-      } catch (e) {
+      } catch {
         // suppressed console.error while loading ticket data
         setError('Error cargando datos');
       } finally {
@@ -324,7 +324,7 @@ export default function TicketPage() {
       } else {
         setSnackbar({ open: true, message: 'El ticket ya se encuentra en proceso o no pudo marcarse', severity: 'info' });
       }
-    } catch (e) {
+    } catch {
       // suppressed console.error on initiate
       setError('Error iniciando el ticket');
     } finally {
@@ -480,13 +480,13 @@ export default function TicketPage() {
     await sendTicketMail(payload);
     setSnackbar({ open: true, message: 'Notificación de Ticket Pausado enviada', severity: 'success' });
   }
-      } catch (e) {
+      } catch {
         // suppressed console.error when sending pause notification
         // Guardar payload para reintento
         try { setFailedNotification({ payload, type: 'pause', dbTicketId, message: 'Notificación de Ticket Pausado' }); } catch (err) { console.warn('No se pudo guardar failedNotification', err); }
         setSnackbar({ open: true, message: 'Falló envío de notificación (ver consola)', severity: 'warning' });
       }
-    } catch (e) {
+    } catch {
       // suppressed console.error while pausing ticket
       setError('Error al pausar el ticket');
     } finally {
@@ -589,17 +589,17 @@ export default function TicketPage() {
             await sendTicketMail(payload);
             setSnackbar({ open: true, message: 'Notificación de Ticket Reanudado enviada', severity: 'success' });
           }
-        } catch (e) {
+        } catch {
           // suppressed console.error when sending resume notification
           try { setFailedNotification({ payload, type: 'resume', dbTicketId, message: 'Notificación de Ticket Reanudado' }); } catch (err) { console.warn('No se pudo guardar failedNotification', err); }
           setSnackbar({ open: true, message: 'Falló envío de notificación (ver consola)', severity: 'warning' });
         }
-      } catch (e) {
+      } catch {
         // suppressed console.error building/sending resume notification
         // don't override main error handler; just show warning
         setSnackbar({ open: true, message: 'No se pudo enviar notificación de reanudación', severity: 'warning' });
       }
-    } catch (e) {
+    } catch {
       // suppressed console.error while resuming ticket
       setError('Error al reanudar el ticket');
     } finally {
@@ -690,7 +690,7 @@ export default function TicketPage() {
         await sendTicketMail(payload);
         setSnackbar({ open: true, message: 'Notificación reenviada (reconstruida por admin)', severity: 'success' });
       }
-    } catch (err) {
+    } catch {
       // suppressed console.error on notification resend failure
       setSnackbar({ open: true, message: 'Reintento falló (ver consola)', severity: 'error' });
     } finally {
@@ -818,11 +818,11 @@ export default function TicketPage() {
         setAdditionalEmails([]);
         setShowEmailInput(false);
         setExtrasOpen(false);
-      } catch (e) {
+      } catch {
         // suppressed console.error when sending comment notification
         setSnackbar({ open: true, message: 'Comentario agregado (falló notificación)', severity: 'warning' });
       }
-    } catch (e) {
+    } catch {
       // suppressed console.error adding comment
       setError('Error al agregar comentario');
     } finally {
@@ -1217,7 +1217,7 @@ export default function TicketPage() {
           const finalMsg = isNew ? 'Ticket creado (Notificación enviada)' : 'Ticket actualizado (Notificación enviada)';
           // éxito gestionado vía snackbar
           setSnackbar({ open: true, message: finalMsg, severity: 'success' });
-        } catch (e) {
+        } catch {
           // suppressed console.error when sending notification
           setError(prev => (prev ? `${prev} (Falló notificación)` : 'Falló notificación por correo'));
         }
@@ -1228,7 +1228,7 @@ export default function TicketPage() {
   setSaving(false);
   setNewAdjuntos([]); // limpiar selección de nuevos
   setTimeout(() => navigate(`/tickets/${ticketData.codigo || ticketIdFinal}`), 900);
-    } catch (e) {
+    } catch {
       // suppressed console.error saving ticket
       setError('Error al guardar ticket');
       setSaving(false);
