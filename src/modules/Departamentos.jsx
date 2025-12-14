@@ -10,12 +10,20 @@ import {
   DialogActions,
   alpha,
   useTheme,
+  CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import BusinessIcon from "@mui/icons-material/Business";
-import { DataGrid } from "@mui/x-data-grid";
+// Replaced DataGrid with MUI Table to avoid @mui/x-data-grid resolution issues
 import { ref, get, set, remove, push } from "firebase/database";
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
@@ -102,7 +110,7 @@ export default function Departamentos() {
       const depsSnap = await get(ref(dbInstance, 'departamentos'));
       if (depsSnap.exists()) {
         const entries = Object.entries(depsSnap.val()); // [ [id, nombre], ... ]
-  const found = entries.find(([, nm]) => String(nm || '').trim().toLowerCase() === nameNormalized);
+        const found = entries.find(([, nm]) => String(nm || '').trim().toLowerCase() === nameNormalized);
         if (found) {
           const foundId = found[0];
           if (!editId || foundId !== editId) {
@@ -191,23 +199,37 @@ export default function Departamentos() {
 
       <GlassCard>
         <Box sx={tableStyles.container(theme)}>
-          <DataGrid
-            rows={departamentos}
-            columns={columns}
-            pageSize={10}
-            rowsPerPageOptions={[5, 10, 20]}
-            disableSelectionOnClick
-            getRowId={(row) => row.id}
-            loading={loading}
-            localeText={{ noRowsLabel: 'No hay departamentos registrados' }}
-            sx={{
-              border: 'none',
-              minHeight: 400,
-              '& .MuiDataGrid-cell': {
-                fontSize: { xs: '0.9rem', sm: '0.95rem' },
-              },
-            }}
-          />
+          {loading ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nombre</TableCell>
+                    <TableCell>Acciones</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {departamentos.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{row.nombre}</TableCell>
+                      <TableCell>
+                        <IconButton onClick={() => handleOpenDialog(row)} sx={{ color: theme.palette.primary.main }}>
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton onClick={() => handleDelete(row.id)} sx={{ color: theme.palette.error.main }}>
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </Box>
       </GlassCard>
 

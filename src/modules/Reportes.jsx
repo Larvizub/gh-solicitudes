@@ -28,9 +28,9 @@ class DataGridErrorBoundary extends React.Component {
   }
 }
 import {
-  Box, Typography, Paper, Button, Grid, TextField, MenuItem, CircularProgress, Snackbar, Alert, Chip, IconButton
+  Box, Typography, Paper, Button, Grid, TextField, MenuItem, CircularProgress, Snackbar, Alert, Chip, IconButton,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow
 } from '@mui/material';
-import { DataGrid } from '@mui/x-data-grid';
 import { ref, get } from 'firebase/database';
 import { useDb } from '../context/DbContext';
 import { getDbForRecinto } from '../firebase/multiDb';
@@ -952,7 +952,7 @@ export default function Reportes() {
       doc.save('reporte_tickets.pdf');
       setSnackbar({ open: true, message: 'Exportado a PDF', severity: 'success' });
     } catch (e) {
-      console.error('Error exportando PDF:', e);
+      // suppressed console.error during PDF export
       setSnackbar({ open: true, message: `Error al exportar a PDF: ${e.message || ''}`.trim(), severity: 'error' });
     } finally {
       setExportandoPdf(false);
@@ -1043,41 +1043,66 @@ export default function Reportes() {
           <Alert severity="error">{error}</Alert>
         ) : (
           <DataGridErrorBoundary>
-            <DataGrid
-              rows={enrichedTickets}
-              columns={columns}
-              autoHeight
-              pageSize={10}
-              rowsPerPageOptions={[10, 25, 50]}
-              sx={{
-                border: 0,
-                fontSize: 15,
-                background: 'transparent',
-                borderRadius: 2,
-                '& .MuiDataGrid-columnHeaders': {
-                  bgcolor: alpha(theme.palette.primary.main, 0.08),
-                  fontWeight: 700,
-                  fontSize: 14,
-                  borderRadius: 2,
-                },
-                '& .MuiDataGrid-row': {
-                  '&:hover': {
-                    background: alpha(theme.palette.primary.main, 0.04),
-                  },
-                },
-                '& .MuiDataGrid-cell': {
-                  fontSize: 14,
-                  borderBottom: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
-                },
-                '& .MuiDataGrid-footerContainer': {
-                  bgcolor: alpha(theme.palette.background.paper, 0.5),
-                  borderRadius: '0 0 8px 8px',
-                },
-              }}
-              disableSelectionOnClick
-              getRowId={row => row.id}
-              localeText={{ noRowsLabel: 'No hay tickets para mostrar' }}
-            />
+              <TableContainer component={Paper} sx={{ background: 'transparent' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>Departamento</strong></TableCell>
+                      <TableCell><strong>Categoría</strong></TableCell>
+                      <TableCell><strong>Estado</strong></TableCell>
+                      <TableCell><strong>Usuario</strong></TableCell>
+                      <TableCell><strong>Usuario Asignado</strong></TableCell>
+                      <TableCell><strong>Fecha</strong></TableCell>
+                      <TableCell><strong>Horas cierre (h)</strong></TableCell>
+                      <TableCell><strong>Adjunto</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {enrichedTickets.map(row => (
+                      <TableRow key={row.id} hover>
+                        <TableCell>{resolveDepartmentName(row.departamento)}</TableCell>
+                        <TableCell>{row.tipo || ''}</TableCell>
+                        <TableCell>{row.estado || ''}</TableCell>
+                        <TableCell>{row.usuario || ''}</TableCell>
+                        <TableCell style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.usuarioAsignado || ''}</TableCell>
+                        <TableCell>{resolveDateFromRow(row)}</TableCell>
+                        <TableCell>
+                          {(() => {
+                            const ms = computeTicketResolutionMs(row);
+                            const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
+                            if (hours === null) return '';
+                            const slaInfo = calculateSlaForTicket(row) || {};
+                            let isExpired = slaInfo?.isExpired;
+                            if (!isExpired) {
+                              try {
+                                const slaHours = slaInfo?.slaHours ?? computeSlaHoursForTicket(row);
+                                if (slaHours !== null && slaHours !== undefined && hours !== null) {
+                                  if (hours > Number(slaHours)) isExpired = true;
+                                }
+                              } catch { /* noop */ }
+                            }
+                            return (
+                              <Chip
+                                label={`${hours}h`}
+                                size="small"
+                                color={isExpired ? undefined : (hours <= 12 ? 'warning' : 'success')}
+                                variant={isExpired ? 'filled' : (hours <= 12 ? 'filled' : 'outlined')}
+                                sx={isExpired ? { backgroundColor: theme.palette.error.main, color: '#fff', fontWeight: 700 } : undefined}
+                              />
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const url = row.adjuntoUrl || row.adjunto?.url || (Array.isArray(row.adjuntos) && row.adjuntos[0]?.url) || row.adjunto;
+                            return url ? <Button href={url} target="_blank" size="small" color="info" sx={{ fontWeight: 700 }}>Ver</Button> : '';
+                          })()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
           </DataGridErrorBoundary>
         )}
       </SectionContainer>

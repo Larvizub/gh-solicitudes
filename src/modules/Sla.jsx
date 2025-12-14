@@ -120,7 +120,7 @@ export default function Sla() {
   setSubcats({});
   setSlaSubcats({});
       } catch (e) {
-        console.error('Error cargando datos SLA', e);
+        // removed console.error while loading SLA data
       } finally {
         setLoading(false);
       }
@@ -143,7 +143,7 @@ export default function Sla() {
       setSubcats(prev => ({ ...prev, [depId]: subSnap.exists() ? subSnap.val() : {} }));
       setSlaSubcats(prev => ({ ...prev, [depId]: slaSubSnap.exists() ? slaSubSnap.val() : {} }));
     } catch (e) {
-      console.error('Error cargando datos del departamento', e);
+      // removed console.error while loading department data
     }
   }, [ctxDb, recinto, tipos]);
 
@@ -214,7 +214,7 @@ export default function Sla() {
       });
       setScanResult({ total, within, breaches: breaches.sort((a,b) => b.elapsed - a.elapsed), scanned: true });
     } catch (e) {
-      console.error('Error en scan SLA', e);
+      // removed console.error during SLA scan
       setError('Error al escanear cumplimiento SLA');
     } finally {
       setScanning(false);
@@ -241,7 +241,7 @@ export default function Sla() {
       setConfigs(prev => ({ ...prev, [departamento]: next }));
       setSuccess('Configuración SLA guardada exitosamente');
     } catch (e) {
-      console.error('Error guardando SLA', e);
+      // removed console.error while saving SLA
       setError('Error al guardar la configuración SLA');
     } finally {
       setEditDialog({ open: false, departamento: null, prioridad: 'Alta', value: '' });
@@ -272,7 +272,7 @@ export default function Sla() {
       });
       setSuccess('SLA de subcategoría guardado exitosamente');
     } catch (e) {
-      console.error('Error guardando SLA subcategoria (all)', e);
+      // suppressed console.error while saving subcategory SLA
       setError('Error al guardar el SLA de subcategoría');
     }
   };
@@ -314,7 +314,7 @@ export default function Sla() {
       });
       setSuccess('SLA editado exitosamente');
     } catch (e) {
-      console.error('Error guardando SLA subcategoría', e);
+      // suppressed console.error while saving a subcategory SLA
       setError('Error al guardar el SLA');
     } finally {
       setSubcatDialog({ open: false, depId: null, tipoId: null, subId: null, prioridad: 'Alta', value: '' });

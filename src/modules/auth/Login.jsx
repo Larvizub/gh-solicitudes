@@ -249,7 +249,6 @@ export default function Login() {
         }
       }
     } catch (err) {
-      console.error(err);
       setError('Correo o contraseña incorrectos');
     } finally {
       setLoading(false);
@@ -366,7 +365,6 @@ export default function Login() {
         }
       }
     } catch (err) {
-      console.error(err);
       if (err.code === 'auth/account-exists-with-different-credential') {
         const emailErr = err.customData?.email;
         let methods = [];

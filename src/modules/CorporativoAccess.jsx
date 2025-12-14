@@ -56,7 +56,7 @@ export default function CorporativoAccess() {
           setAuthorized(snap.val() || {});
         }
       } catch (e) {
-        console.error('Error cargando autorizados', e);
+          // removed console.error while loading authorized users
         setAuthorized({});
       } finally {
         setLoadingAuth(false);
@@ -80,7 +80,7 @@ export default function CorporativoAccess() {
       }
       setSnackbar({ open: true, message: 'Usuarios de origen cargados', severity: 'success' });
     } catch (e) {
-      console.error('Error cargando usuarios origen', e);
+      // removed console.error while fetching source users
       setSnackbar({ open: true, message: 'Error cargando usuarios de origen', severity: 'error' });
     } finally {
       setLoadingSource(false);
@@ -98,7 +98,7 @@ export default function CorporativoAccess() {
         setAuthorized(snap.val() || {});
       }
     } catch (e) {
-      console.error('Error cargando autorizados', e);
+      // removed console.error while refreshing authorized
       setAuthorized({});
     } finally {
       setLoadingAuth(false);
@@ -143,7 +143,7 @@ export default function CorporativoAccess() {
       setSelectedIds(new Set());
       setSnackbar({ open: true, message: 'Usuarios autorizados correctamente', severity: 'success' });
     } catch (e) {
-      console.error('Error autorizando usuarios', e);
+      // removed console.error for authorizeSelected
       setSnackbar({ open: true, message: 'Error autorizando usuarios', severity: 'error' });
     }
   };
@@ -159,7 +159,7 @@ export default function CorporativoAccess() {
       });
       setSnackbar({ open: true, message: 'Autorización revocada', severity: 'info' });
     } catch (e) {
-      console.error('Error revocando', e);
+      // removed console.error for revoke
       setSnackbar({ open: true, message: 'Error al revocar autorización', severity: 'error' });
     }
   };

@@ -56,7 +56,7 @@ export default function DepartamentosUsuarios() {
         setUsuarios(Object.entries(users).map(([id, u]) => ({ id, ...u })));
         if (!selectedDept && depArray.length > 0) setSelectedDept(depArray[0].id);
       } catch (e) {
-        console.error('Error cargando departamentos/usuarios', e);
+          // removed console.error while loading departamentos/usuarios
         setError('No se pudieron cargar departamentos o usuarios');
       }
     };
@@ -91,7 +91,7 @@ export default function DepartamentosUsuarios() {
       setSuccess('Usuario asignado');
       setTimeout(() => setSuccess(''), 1500);
     } catch (e) {
-      console.error(e);
+      // suppressed error log
       setError('Error al asignar usuario');
     }
   };
@@ -106,7 +106,7 @@ export default function DepartamentosUsuarios() {
       setSuccess('Asignación removida');
       setTimeout(() => setSuccess(''), 1500);
     } catch (e) {
-      console.error(e);
+      // suppressed error log
       setError('Error al remover asignación');
     }
   };

@@ -193,7 +193,7 @@ export default function Register() {
       }
       navigate('/dashboard');
     } catch (err) {
-      console.error('Error registrando usuario', err);
+      // removed console.error for registration errors
       setError('Error al registrar usuario');
     } finally {
       setLoading(false);

@@ -300,7 +300,7 @@ export default function TicketPage() {
           setCommentsArr([]);
         }
       } catch (e) {
-        console.error(e);
+        // suppressed console.error while loading ticket data
         setError('Error cargando datos');
       } finally {
         setLoading(false);
@@ -325,7 +325,7 @@ export default function TicketPage() {
         setSnackbar({ open: true, message: 'El ticket ya se encuentra en proceso o no pudo marcarse', severity: 'info' });
       }
     } catch (e) {
-      console.error('Error iniciando ticket', e);
+      // suppressed console.error on initiate
       setError('Error iniciando el ticket');
     } finally {
       setSaving(false);
@@ -481,13 +481,13 @@ export default function TicketPage() {
     setSnackbar({ open: true, message: 'Notificación de Ticket Pausado enviada', severity: 'success' });
   }
       } catch (e) {
-        console.error('Error enviando notificación de pausa', e);
+        // suppressed console.error when sending pause notification
         // Guardar payload para reintento
         try { setFailedNotification({ payload, type: 'pause', dbTicketId, message: 'Notificación de Ticket Pausado' }); } catch (err) { console.warn('No se pudo guardar failedNotification', err); }
         setSnackbar({ open: true, message: 'Falló envío de notificación (ver consola)', severity: 'warning' });
       }
     } catch (e) {
-      console.error('Error pausando ticket', e);
+      // suppressed console.error while pausing ticket
       setError('Error al pausar el ticket');
     } finally {
       setPauseLoading(false);
@@ -590,17 +590,17 @@ export default function TicketPage() {
             setSnackbar({ open: true, message: 'Notificación de Ticket Reanudado enviada', severity: 'success' });
           }
         } catch (e) {
-          console.error('Error enviando notificación de reanudación', e);
+          // suppressed console.error when sending resume notification
           try { setFailedNotification({ payload, type: 'resume', dbTicketId, message: 'Notificación de Ticket Reanudado' }); } catch (err) { console.warn('No se pudo guardar failedNotification', err); }
           setSnackbar({ open: true, message: 'Falló envío de notificación (ver consola)', severity: 'warning' });
         }
       } catch (e) {
-        console.error('Error construyendo/enviando notificación de reanudación', e);
+        // suppressed console.error building/sending resume notification
         // don't override main error handler; just show warning
         setSnackbar({ open: true, message: 'No se pudo enviar notificación de reanudación', severity: 'warning' });
       }
     } catch (e) {
-      console.error('Error reanudando ticket', e);
+      // suppressed console.error while resuming ticket
       setError('Error al reanudar el ticket');
     } finally {
       setPauseLoading(false);
@@ -691,7 +691,7 @@ export default function TicketPage() {
         setSnackbar({ open: true, message: 'Notificación reenviada (reconstruida por admin)', severity: 'success' });
       }
     } catch (err) {
-      console.error('Reintento de notificación falló', err);
+      // suppressed console.error on notification resend failure
       setSnackbar({ open: true, message: 'Reintento falló (ver consola)', severity: 'error' });
     } finally {
       setNotifRetryLoading(false);
@@ -819,11 +819,11 @@ export default function TicketPage() {
         setShowEmailInput(false);
         setExtrasOpen(false);
       } catch (e) {
-        console.error('Error enviando notificación de comentario', e);
+        // suppressed console.error when sending comment notification
         setSnackbar({ open: true, message: 'Comentario agregado (falló notificación)', severity: 'warning' });
       }
     } catch (e) {
-      console.error('Error agregando comentario', e);
+      // suppressed console.error adding comment
       setError('Error al agregar comentario');
     } finally {
       setCommentLoading(false);
@@ -1218,7 +1218,7 @@ export default function TicketPage() {
           // éxito gestionado vía snackbar
           setSnackbar({ open: true, message: finalMsg, severity: 'success' });
         } catch (e) {
-          console.error('Error enviando notificación', e);
+          // suppressed console.error when sending notification
           setError(prev => (prev ? `${prev} (Falló notificación)` : 'Falló notificación por correo'));
         }
       }
@@ -1229,7 +1229,7 @@ export default function TicketPage() {
   setNewAdjuntos([]); // limpiar selección de nuevos
   setTimeout(() => navigate(`/tickets/${ticketData.codigo || ticketIdFinal}`), 900);
     } catch (e) {
-      console.error(e);
+      // suppressed console.error saving ticket
       setError('Error al guardar ticket');
       setSaving(false);
     }

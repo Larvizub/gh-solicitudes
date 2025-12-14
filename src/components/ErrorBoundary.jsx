@@ -10,7 +10,7 @@ export default class ErrorBoundary extends React.Component {
     return { hasError: true, error };
   }
   componentDidCatch(error, info) {
-    console.error('ErrorBoundary caught error', error, info);
+    // Error logging removed to avoid console.error in production
   }
   handleReload = () => {
     // Try to recover without forcing a full reload: reset state to attempt render again

@@ -183,7 +183,7 @@ export default function Perfil() {
       }
       return true;
     } catch {
-      console.error('Error asignando departamento desde diálogo');
+        // removed console.error when assigning department from dialog
       return false;
     }
   };
@@ -323,7 +323,7 @@ export default function Perfil() {
       }
       setSuccess('Avatar actualizado');
     } catch (err) {
-      console.error('Error subiendo avatar', err);
+      // removed console.error during avatar upload
       setError('Error al subir el avatar');
     }
   };

@@ -44,14 +44,14 @@ export async function registerForPush(onMessageCallback) {
                 try {
                     onMessageCallback(payload);
                 } catch (e) {
-                    console.error('onMessageCallback error', e);
+                    // onMessage callback error suppressed to avoid console.error
                 }
             });
         }
 
         return token;
     } catch (err) {
-        console.error('Error registering for push', err);
+        // suppressed console.error during push registration
         return null;
     }
 }

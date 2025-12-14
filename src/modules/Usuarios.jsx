@@ -14,13 +14,21 @@ import {
   useTheme,
   Fade,
   Tooltip,
+  CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from '@mui/material';
 import Avatar from '@mui/material/Avatar';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import PeopleIcon from '@mui/icons-material/People';
-import { DataGrid } from '@mui/x-data-grid';
+// Using MUI Table instead of DataGrid to avoid @mui/x-data-grid resolution issues
 import { ref as dbRef, get, set, remove, update, push } from 'firebase/database';
 import { storage } from '../firebase/firebaseConfig';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -262,23 +270,47 @@ export default function Usuarios() {
         </Box>
         
         <Box sx={tableStyles.container(theme)}>
-          <DataGrid
-            rows={filteredUsuarios}
-            columns={columns}
-            pageSize={10}
-            rowsPerPageOptions={[5, 10, 20]}
-            disableSelectionOnClick
-            getRowId={(row) => row.id}
-            loading={loading}
-            localeText={{ noRowsLabel: 'No hay usuarios registrados' }}
-            sx={{
-              border: 'none',
-              minHeight: 400,
-              '& .MuiDataGrid-cell': {
-                fontSize: { xs: '0.9rem', sm: '0.95rem' },
-              },
-            }}
-          />
+          {loading ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Nombre</TableCell>
+                    <TableCell>Apellido</TableCell>
+                    <TableCell>Correo</TableCell>
+                    <TableCell>Departamento</TableCell>
+                    <TableCell>Rol</TableCell>
+                    {userData?.rol === 'admin' && <TableCell>Acciones</TableCell>}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredUsuarios.map(u => (
+                    <TableRow key={u.id} hover>
+                      <TableCell>{u.nombre}</TableCell>
+                      <TableCell>{u.apellido}</TableCell>
+                      <TableCell>{u.email}</TableCell>
+                      <TableCell>{u.departamento}</TableCell>
+                      <TableCell>{u.rol}</TableCell>
+                      {userData?.rol === 'admin' && (
+                        <TableCell>
+                          <IconButton onClick={() => handleOpenDialog(u)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton onClick={() => handleDelete(u.id)} sx={{ '& .MuiSvgIcon-root': { color: (theme) => theme.palette.mode === 'dark' ? theme.palette.common.white : undefined } }}>
+                            <DeleteIcon />
+                          </IconButton>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </Box>
       </GlassCard>
 

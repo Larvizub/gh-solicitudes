@@ -39,7 +39,7 @@ export function DbProvider({ children }) {
         console.log('DbContext: DB inicializada correctamente', inst ? 'OK' : 'NULL');
         if (!cancelled) setDb(inst);
       } catch (e) {
-        console.error('Error inicializando DB para recinto', recinto, e);
+        // removed console.error to avoid error logs
         if (!cancelled) setDb(null);
       } finally {
         if (!cancelled) setLoading(false);

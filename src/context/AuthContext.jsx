@@ -131,7 +131,7 @@ export function AuthProvider({ children }) {
               console.debug('AuthContext: fallo diagnóstico permiso-denegado', diagErr);
             }
           } else {
-            console.error('Error cargando userData desde la DB seleccionada', e);
+            // removed console.error to avoid noisy error logs
           }
         }
 
