@@ -29,7 +29,7 @@ class DataGridErrorBoundary extends React.Component {
 }
 import {
   Box, Typography, Paper, Button, Grid, TextField, MenuItem, CircularProgress, Snackbar, Alert, Chip, IconButton,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination
 } from '@mui/material';
 import { ref, get } from 'firebase/database';
 import { useDb } from '../context/DbContext';
@@ -68,6 +68,9 @@ export default function Reportes() {
   const [filtroDep, setFiltroDep] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  // Paginación de tabla
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
   const theme = useTheme();
 
   // Mostrar notificaciones
@@ -975,7 +978,7 @@ export default function Reportes() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {enrichedTickets.map(row => (
+                    {enrichedTickets.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(row => (
                       <TableRow key={row.id} hover>
                         <TableCell>{resolveDepartmentName(row.departamento)}</TableCell>
                         <TableCell>{row.tipo || ''}</TableCell>
@@ -1019,6 +1022,17 @@ export default function Reportes() {
                     ))}
                   </TableBody>
                 </Table>
+                {/* Paginación */}
+                <TablePagination
+                  component="div"
+                  count={enrichedTickets.length}
+                  page={page}
+                  onPageChange={(_, newPage) => setPage(newPage)}
+                  rowsPerPage={rowsPerPage}
+                  onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+                  rowsPerPageOptions={[10, 20, 50]}
+                  labelRowsPerPage="Filas por página"
+                />
               </TableContainer>
           </DataGridErrorBoundary>
         )}
