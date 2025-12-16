@@ -21,7 +21,7 @@ export default function CorporativoAccess() {
   const { userData } = useAuth();
   const { recinto: currentRecinto } = useDb();
   const theme = useTheme();
-  const { notify } = useNotification();
+  const notify = useNotification();
   // Determinar recinto del usuario: preferir userData.recinto si está disponible;
   // en caso contrario usar el recinto actual del contexto o el guardado en localStorage.
   const userRecinto = userData?.recinto || currentRecinto || localStorage.getItem('selectedRecinto') || 'CCCI';
