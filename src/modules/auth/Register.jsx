@@ -192,7 +192,7 @@ export default function Register() {
         });
       }
       navigate('/dashboard');
-    } catch (err) {
+    } catch {
       // removed console.error for registration errors
       setError('Error al registrar usuario');
     } finally {

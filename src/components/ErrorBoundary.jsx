@@ -11,6 +11,7 @@ export default class ErrorBoundary extends React.Component {
   }
   componentDidCatch(error, info) {
     // Error logging removed to avoid console.error in production
+    void error; void info;
   }
   handleReload = () => {
     // Try to recover without forcing a full reload: reset state to attempt render again

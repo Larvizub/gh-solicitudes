@@ -43,14 +43,14 @@ export async function registerForPush(onMessageCallback) {
                 console.log('Message received in foreground: ', payload);
                 try {
                     onMessageCallback(payload);
-                } catch (e) {
+                } catch {
                     // onMessage callback error suppressed to avoid console.error
                 }
             });
         }
 
         return token;
-    } catch (err) {
+    } catch {
         // suppressed console.error during push registration
         return null;
     }

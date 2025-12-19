@@ -38,7 +38,7 @@ export function DbProvider({ children }) {
         const inst = await getDbForRecinto(recinto);
         console.log('DbContext: DB inicializada correctamente', inst ? 'OK' : 'NULL');
         if (!cancelled) setDb(inst);
-      } catch (e) {
+      } catch {
         // removed console.error to avoid error logs
         if (!cancelled) setDb(null);
       } finally {

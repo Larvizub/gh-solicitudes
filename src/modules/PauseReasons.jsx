@@ -84,7 +84,7 @@ export default function PauseReasons() {
       // reload
       const snap = await get(dbRef(dbInstance, `pauseReasons/${selectedDep}`));
       if (snap.exists()) setReasons(Object.entries(snap.val()).map(([id, v]) => ({ id, ...v })));
-    } catch (e) {
+    } catch {
       // removed console.error during add reason
       setError('Error al agregar motivo');
     }
@@ -96,7 +96,7 @@ export default function PauseReasons() {
       await remove(dbRef(dbInstance, `pauseReasons/${selectedDep}/${id}`));
       setReasons(r => r.filter(x => x.id !== id));
       notify('Motivo eliminado', 'success');
-    } catch (e) {
+    } catch {
       // removed console.error during delete reason
       setError('Error al eliminar motivo');
     }

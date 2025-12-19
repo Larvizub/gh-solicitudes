@@ -21,7 +21,7 @@ import { useAuth } from '../context/useAuth';
 import { ref, get, update } from 'firebase/database';
 import { getDbForRecinto } from '../firebase/multiDb';
 import { ModuleContainer, PageHeader, GlassCard, SectionContainer, EmptyState } from '../components/ui/SharedStyles';
-import { gradients } from '../components/ui/sharedStyles.constants';
+// gradients no usado aquí
 import useNotification from '../context/useNotification';
 
 export default function DepartamentosUsuarios() {
@@ -55,7 +55,7 @@ export default function DepartamentosUsuarios() {
   setDepartamentos(depArray);
         setUsuarios(Object.entries(users).map(([id, u]) => ({ id, ...u })));
         if (!selectedDept && depArray.length > 0) setSelectedDept(depArray[0].id);
-      } catch (e) {
+      } catch {
           // removed console.error while loading departamentos/usuarios
         setError('No se pudieron cargar departamentos o usuarios');
       }
@@ -90,7 +90,7 @@ export default function DepartamentosUsuarios() {
   await update(ref(dbToUse, `usuarios/${user.id}`), { ...user, departamento: depToStore });
       setSuccess('Usuario asignado');
       setTimeout(() => setSuccess(''), 1500);
-    } catch (e) {
+    } catch {
       // suppressed error log
       setError('Error al asignar usuario');
     }
@@ -105,7 +105,7 @@ export default function DepartamentosUsuarios() {
   await update(ref(dbToUse, `usuarios/${user.id}`), { ...user, departamento: '' });
       setSuccess('Asignación removida');
       setTimeout(() => setSuccess(''), 1500);
-    } catch (e) {
+    } catch {
       // suppressed error log
       setError('Error al remover asignación');
     }

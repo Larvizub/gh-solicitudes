@@ -248,7 +248,7 @@ export default function Login() {
           navigate('/dashboard');
         }
       }
-    } catch (err) {
+    } catch {
       setError('Correo o contraseña incorrectos');
     } finally {
       setLoading(false);

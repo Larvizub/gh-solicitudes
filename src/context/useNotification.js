@@ -1,7 +1,7 @@
 import React from 'react';
 import { NotificationContext } from './NotificationContext';
 
-function noopNotify(..._args) { try { /* noop */ } catch { void 0; } }
+function noopNotify() { try { /* noop */ } catch { void 0; } }
 
 function _wrapNotify(maybeFn) {
   if (typeof maybeFn === 'function') {
@@ -18,19 +18,13 @@ function _wrapNotify(maybeFn) {
 }
 
 export default function useNotification() {
-  // Defensive: if React or useContext is not available (possible multiple-React issue),
-  // return a noop so the app doesn't crash while we debug the root cause.
-  if (!React || typeof React.useContext !== 'function') {
-    console.warn('[useNotification] React.useContext not available, returning noop');
-    return _wrapNotify(noopNotify);
-  }
-
+  // Llamar a useContext de forma NO condicional
+  const ctx = React.useContext(NotificationContext);
   try {
-    const ctx = React.useContext(NotificationContext);
     if (ctx && ctx.notify) return _wrapNotify(ctx.notify);
-    return _wrapNotify((...args) => { try { console.warn('[Notification] provider not mounted, notify called with', args); } catch { void 0; } });
-  } catch (err) {
-    console.warn('[useNotification] error reading context, returning noop', err);
+  } catch (e) {
+    console.warn('[useNotification] error reading context, returning noop', e);
     return _wrapNotify(noopNotify);
   }
+  return _wrapNotify((...args) => { try { console.warn('[Notification] provider not mounted, notify called with', args); } catch { void 0; } });
 }

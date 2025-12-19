@@ -1,11 +1,7 @@
 import React, { Suspense } from 'react';
 import CircularProgress from '@mui/material/CircularProgress';
 import Box from '@mui/material/Box';
-import Paper from '@mui/material/Paper';
-import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
-import Alert from '@mui/material/Alert';
-import Snackbar from '@mui/material/Snackbar';
+// Eliminadas importaciones de alerta/Snackbar: ya no se muestran warnings globales
 import NotificationProvider from './context/NotificationContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -32,7 +28,7 @@ import { useAuth } from './context/useAuth';
 
 
 export default function App() {
-  const { user, userData, loading, dbAccessError } = useAuth();
+  const { user, userData, loading } = useAuth();
   const isAuthenticated = !!user;
   const userRole = userData?.rol || 'estandar';
   const needsDeptRedirect = isAuthenticated && !(userData?.departamento && userData.departamento.trim());
@@ -81,11 +77,7 @@ export default function App() {
           </ErrorBoundary>
         </BrowserRouter>
       )}
-        <Snackbar open={Boolean(dbAccessError)} autoHideDuration={10000} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
-          <Alert severity="warning" sx={{ width: '100%' }}>
-            No se pudieron leer permisos/datos del usuario en la base de datos seleccionada. La aplicación usará datos de sesión básicos; revisa el recinto o contacta al administrador si algo falta.
-          </Alert>
-        </Snackbar>
+        {/* Advertencia por errores de acceso a DB eliminada: no se muestra al iniciar sesión */}
     </NotificationProvider>
   );
 }

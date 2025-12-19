@@ -322,7 +322,7 @@ export default function Perfil() {
         window.dispatchEvent(new Event('userProfileUpdated'));
       }
       setSuccess('Avatar actualizado');
-    } catch (err) {
+    } catch {
       // removed console.error during avatar upload
       setError('Error al subir el avatar');
     }
