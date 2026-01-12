@@ -21,10 +21,18 @@ export default function useNotification() {
   // Llamar a useContext de forma NO condicional
   const ctx = React.useContext(NotificationContext);
   try {
-    if (ctx && ctx.notify) return _wrapNotify(ctx.notify);
+    if (ctx && ctx.notify) {
+      const result = _wrapNotify(ctx.notify);
+      result.enableNotifications = ctx.enableNotifications;
+      return result;
+    }
   } catch (e) {
     console.warn('[useNotification] error reading context, returning noop', e);
-    return _wrapNotify(noopNotify);
+    const result = _wrapNotify(noopNotify);
+    result.enableNotifications = async () => null;
+    return result;
   }
-  return _wrapNotify((...args) => { try { console.warn('[Notification] provider not mounted, notify called with', args); } catch { void 0; } });
+  const result = _wrapNotify((...args) => { try { console.warn('[Notification] provider not mounted, notify called with', args); } catch { void 0; } });
+  result.enableNotifications = async () => null;
+  return result;
 }

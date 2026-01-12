@@ -32,31 +32,31 @@ export async function registerForPush(onMessageCallback) {
 
         // Obtener token FCM
         const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
-        console.log('FCM token:', token);
-
-        // Opcional: enviar el token a tu backend para guardarlo y usarlo en notificaciones dirigidas
-        // await saveTokenToBackend(token);
-
-        // Mensajes en primer plano
-        if (onMessageCallback) {
-            onMessage(messaging, (payload) => {
-                console.log('Message received in foreground: ', payload);
-                try {
-                    onMessageCallback(payload);
-                } catch {
-                    // onMessage callback error suppressed to avoid console.error
-                }
-            });
+        
+        if (token) {
+            console.log('FCM token obtained:', token);
+            // Opcional: enviar el token a tu backend o guardarlo en la base de datos de Firebase vinculada al usuario
         }
 
+        // Mensajes en primer plano
+        onMessage(messaging, (payload) => {
+            console.log('Message received in foreground: ', payload);
+            if (onMessageCallback) {
+                onMessageCallback(payload);
+            }
+        });
+
         return token;
-    } catch {
-        // suppressed console.error during push registration
+    } catch (error) {
+        console.error('Error during FCM registration:', error);
         return null;
     }
 }
 
 export function listenForegroundMessages(callback) {
-    if (!messaging) return;
-    onMessage(messaging, callback);
+    if (!messaging) return () => {};
+    return onMessage(messaging, (payload) => {
+        console.log('Foreground message received:', payload);
+        callback(payload);
+    });
 }

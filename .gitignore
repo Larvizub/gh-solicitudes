@@ -27,3 +27,7 @@ dist-ssr
 # Env files (no subir secretos)
 .env
 .env.*.local
+
+# Firebase files
+.firebase/
+.firebaserc

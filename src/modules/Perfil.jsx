@@ -6,6 +6,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import { ref, get, update } from 'firebase/database';
 import { updatePassword, updateProfile } from 'firebase/auth';
 import { useAuth } from '../context/useAuth';
@@ -20,7 +21,7 @@ export default function Perfil() {
   const { user, userData, logout } = useAuth();
   const { db: ctxDb, recinto } = useDb();
   const theme = useTheme();
-  const { notify } = useNotification();
+  const { notify, enableNotifications } = useNotification();
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [departamento, setDepartamento] = useState('');
@@ -223,6 +224,22 @@ export default function Perfil() {
     };
     fetchTickets();
   }, [user, ctxDb, recinto]);
+
+  const handleEnableNotifications = async () => {
+    const token = await enableNotifications();
+    if (token) {
+      // Guardar el token en la base de datos para este usuario
+      try {
+        const dbToUse = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
+        await update(ref(dbToUse, `usuarios/${user.uid}`), { fcmToken: token });
+        console.log('FCM Token saved to user profile');
+        setSuccess('Notificaciones activadas y configuradas. Puedes cerrar la app y agregala a inicio para recibir avisos.');
+      } catch (err) {
+        console.error('Error saving FCM token:', err);
+        setError('Notificaciones activadas pero no se pudo guardar el token en tu perfil.');
+      }
+    }
+  };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
@@ -591,11 +608,29 @@ export default function Perfil() {
             </TextField>
             <TextField label="Nueva contraseña" fullWidth margin="normal" type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" />
             <TextField label="Fecha de registro" fullWidth margin="normal" value={fechaRegistro} InputProps={{ readOnly: true }} />
+            
+            <Box sx={{ mt: 3, mb: 1, p: 2, borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, 0.05), border: `1px dashed ${alpha(theme.palette.primary.main, 0.3)}` }}>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>Notificaciones Push</Typography>
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 1.5 }}>
+                Recibe avisos sobre cambios en tus tickets. En iOS, debes instalar la app (Añadir a inicio) primero.
+              </Typography>
+              <Button 
+                fullWidth 
+                variant="outlined" 
+                size="small"
+                onClick={handleEnableNotifications}
+                startIcon={<NotificationsIcon />}
+                sx={{ fontWeight: 600 }}
+              >
+                Activar en este dispositivo
+              </Button>
+            </Box>
+
             <Button 
               fullWidth 
               variant="contained" 
               sx={{ 
-                mt: 3, 
+                mt: 2, 
                 py: 1.5, 
                 fontWeight: 700, 
                 fontSize: 16, 
