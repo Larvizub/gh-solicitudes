@@ -49,7 +49,6 @@ export function DbProvider({ children }) {
     return () => { cancelled = true; };
   }, [recinto]);
 
-  // Escuchar en tiempo real 'tiposTickets' y 'subcategoriasTickets' para sincronizar la UI globalmente
   useEffect(() => {
     if (!db) {
       setTiposTickets({});
@@ -78,7 +77,6 @@ export function DbProvider({ children }) {
     };
   }, [db]);
 
-  // Persistir selección
   useEffect(() => {
   try { localStorage.setItem('selectedRecinto', recinto); } catch (e) { console.warn('No se pudo persistir recinto', e); }
   }, [recinto]);

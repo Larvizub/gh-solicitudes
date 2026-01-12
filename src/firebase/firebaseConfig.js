@@ -1,4 +1,3 @@
-// Configuración de Firebase (rellenar con tus credenciales)
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
@@ -19,5 +18,4 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getDatabase(app);
 export const storage = getStorage(app);
-// Messaging (optional - used by FCM integration)
 export const messaging = getMessaging ? getMessaging(app) : null;

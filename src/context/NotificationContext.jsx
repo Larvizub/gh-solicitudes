@@ -10,14 +10,12 @@ import { registerForPush, listenForegroundMessages } from '../services/fcm';
 
 const NotificationContext = createContext();
 function NotificationProvider({ children }) {
-  // Toast (Snackbar) state
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastSeverity, setToastSeverity] = useState('success');
   const [toastDuration, setToastDuration] = useState(3000);
   const [toastPersist, setToastPersist] = useState(false);
 
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
   const [modalSeverity, setModalSeverity] = useState('success');
@@ -54,7 +52,6 @@ function NotificationProvider({ children }) {
     return null;
   }, [notify]);
 
-  // Escuchar mensajes en primer plano
   useEffect(() => {
     const unsubscribe = listenForegroundMessages((payload) => {
       console.log('Foreground notification received in context:', payload);

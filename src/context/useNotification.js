@@ -18,7 +18,6 @@ function _wrapNotify(maybeFn) {
 }
 
 export default function useNotification() {
-  // Llamar a useContext de forma NO condicional
   const ctx = React.useContext(NotificationContext);
   try {
     if (ctx && ctx.notify) {
