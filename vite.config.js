@@ -2,19 +2,23 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
+import process from 'node:process'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
   const placeholders = {
-    'FIREBASE_API_KEY_PLACEHOLDER': env.VITE_FIREBASE_API_KEY,
-    'FIREBASE_AUTH_DOMAIN_PLACEHOLDER': env.VITE_FIREBASE_AUTH_DOMAIN,
-    'FIREBASE_DATABASE_URL_PLACEHOLDER': env.VITE_FIREBASE_DATABASE_URL,
-    'FIREBASE_PROJECT_ID_PLACEHOLDER': env.VITE_FIREBASE_PROJECT_ID,
-    'FIREBASE_STORAGE_BUCKET_PLACEHOLDER': env.VITE_FIREBASE_STORAGE_BUCKET,
-    'FIREBASE_MESSAGING_SENDER_ID_PLACEHOLDER': env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    'FIREBASE_APP_ID_PLACEHOLDER': env.VITE_FIREBASE_APP_ID,
+    'FIREBASE_API_KEY_PLACEHOLDER': env.VITE_FIREBASE_API_KEY || '',
+    'FIREBASE_AUTH_DOMAIN_PLACEHOLDER': env.VITE_FIREBASE_AUTH_DOMAIN || '',
+    'FIREBASE_DATABASE_URL_PLACEHOLDER': env.VITE_FIREBASE_DATABASE_URL || '',
+    'FIREBASE_PROJECT_ID_PLACEHOLDER': env.VITE_FIREBASE_PROJECT_ID || '',
+    'FIREBASE_STORAGE_BUCKET_PLACEHOLDER': env.VITE_FIREBASE_STORAGE_BUCKET || '',
+    'FIREBASE_MESSAGING_SENDER_ID_PLACEHOLDER': env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+    'FIREBASE_APP_ID_PLACEHOLDER': env.VITE_FIREBASE_APP_ID || '',
   };
 
   return {
