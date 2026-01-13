@@ -35,6 +35,7 @@ export default function Perfil() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [enablingPush, setEnablingPush] = useState(false);
   // const [avatarFile, setAvatarFile] = useState(null);
   const [perfilCompleto, setPerfilCompleto] = useState(0);
   const [fechaRegistro, setFechaRegistro] = useState('');
@@ -226,6 +227,7 @@ export default function Perfil() {
   }, [user, ctxDb, recinto]);
 
   const handleEnableNotifications = async () => {
+    setEnablingPush(true);
     const token = await enableNotifications();
     if (token) {
       // Guardar el token en la base de datos para este usuario
@@ -234,11 +236,16 @@ export default function Perfil() {
         await update(ref(dbToUse, `usuarios/${user.uid}`), { fcmToken: token });
         console.log('FCM Token saved to user profile');
         setSuccess('Notificaciones activadas y configuradas. Puedes cerrar la app y agregala a inicio para recibir avisos.');
+        // Disparar evento para que AuthProvider recargue userData
+        if (typeof window !== 'undefined' && window.dispatchEvent) {
+          window.dispatchEvent(new Event('userProfileUpdated'));
+        }
       } catch (err) {
         console.error('Error saving FCM token:', err);
         setError('Notificaciones activadas pero no se pudo guardar el token en tu perfil.');
       }
     }
+    setEnablingPush(false);
   };
 
   const handleUpdate = async (e) => {
@@ -616,13 +623,15 @@ export default function Perfil() {
               </Typography>
               <Button 
                 fullWidth 
-                variant="outlined" 
+                variant={userData?.fcmToken ? "contained" : "outlined"} 
                 size="small"
                 onClick={handleEnableNotifications}
-                startIcon={<NotificationsIcon />}
-                sx={{ fontWeight: 600 }}
+                disabled={enablingPush}
+                startIcon={enablingPush ? <CircularProgress size={16} color="inherit" /> : (userData?.fcmToken ? <CheckCircleIcon /> : <NotificationsIcon />)}
+                color={userData?.fcmToken ? "success" : "primary"}
+                sx={{ fontWeight: 600, color: userData?.fcmToken ? '#fff' : undefined }}
               >
-                Activar en este dispositivo
+                {userData?.fcmToken ? 'Notificaciones Activas' : 'Activar en este dispositivo'}
               </Button>
             </Box>
 
