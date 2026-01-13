@@ -27,11 +27,12 @@ createRoot(document.getElementById('root')).render(
 // Register service worker for basic offline support and PWA installability
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    const swUrl = '/sw.js';
-    navigator.serviceWorker.register(swUrl).then(reg => {
-      console.log('Service Worker registrado:', reg.scope);
-    }).catch(err => {
-      console.warn('Error registrando Service Worker:', err);
-    });
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => {
+        console.log('Service Worker registrado con éxito:', reg.scope);
+      })
+      .catch(err => {
+        console.error('Fallo al registrar el Service Worker:', err);
+      });
   });
 }

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useState, useCallback } from 'react';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import Dialog from '@mui/material/Dialog';
@@ -6,7 +6,6 @@ import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
-import { registerForPush, listenForegroundMessages } from '../services/fcm';
 
 const NotificationContext = createContext();
 function NotificationProvider({ children }) {
@@ -36,34 +35,6 @@ function NotificationProvider({ children }) {
     }
   }, []);
 
-  const enableNotifications = useCallback(async () => {
-    try {
-      const token = await registerForPush();
-      if (token) {
-        notify('Notificaciones activadas con éxito', 'success');
-        return token;
-      } else {
-        notify('No se pudieron activar las notificaciones. Verifica los permisos de tu navegador.', 'warning');
-      }
-    } catch (error) {
-      console.error('Error enabling notifications:', error);
-      notify('Error al activar notificaciones', 'error');
-    }
-    return null;
-  }, [notify]);
-
-  useEffect(() => {
-    const unsubscribe = listenForegroundMessages((payload) => {
-      console.log('Foreground notification received in context:', payload);
-      const title = payload.notification?.title || 'Nueva notificación';
-      const body = payload.notification?.body || 'Tienes un nuevo mensaje';
-      notify(`${title}: ${body}`, 'info', { duration: 6000 });
-    });
-    return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
-    };
-  }, [notify]);
-
   const handleToastClose = (_, reason) => {
     if (reason === 'clickaway') return;
     setToastOpen(false);
@@ -72,7 +43,7 @@ function NotificationProvider({ children }) {
   const handleModalClose = () => setModalOpen(false);
 
   return (
-    <NotificationContext.Provider value={{ notify, enableNotifications }}>
+    <NotificationContext.Provider value={{ notify }}>
       {children}
 
       {/* Toast positioned top-right so it's visible regardless of scroll */}
