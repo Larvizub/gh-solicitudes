@@ -59,6 +59,54 @@ async function getGraphToken() {
 
 function graphClient(token) { return Client.init({ authProvider: done => done(null, token) }); }
 
+/**
+ * Envía una notificación push a una lista de correos electrónicos.
+ * Busca el fcmToken en la rama /usuarios.
+ */
+async function sendPushToUsers(emails, title, body, data = {}) {
+  if (!emails || !emails.length) return;
+  try {
+    const recipients = Array.isArray(emails) ? emails : [emails];
+    const tokens = [];
+
+    // Buscar tokens para los correos proporcionados
+    for (const email of recipients) {
+      if (!email) continue;
+      try {
+        const userSnap = await db.ref('usuarios').orderByChild('email').equalTo(email.toLowerCase()).once('value');
+        if (userSnap.exists()) {
+          const users = userSnap.val();
+          Object.values(users).forEach(u => {
+            if (u && u.fcmToken) tokens.push(u.fcmToken);
+          });
+        }
+      } catch (err) {
+        console.warn(`Error buscando token para ${email}:`, err.message);
+      }
+    }
+
+    if (tokens.length === 0) {
+      console.log('No se encontraron tokens FCM para los destinatarios.');
+      return;
+    }
+
+    const uniqueTokens = [...new Set(tokens)];
+    const message = {
+      notification: {
+        title: title || 'Notificación de GH Solicitudes',
+        body: body || 'Tienes una nueva actualización en tus tickets.',
+      },
+      data: Object.assign({ click_action: '/tickets' }, data),
+      tokens: uniqueTokens,
+    };
+
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(`Notificaciones push enviadas: ${response.successCount} exitosas, ${response.failureCount} fallidas.`);
+  } catch (error) {
+    console.error('Error enviando notificaciones push:', error);
+  }
+}
+
 function parseTimestampCandidate(ticket) {
   if (ticket.createdAt) return new Date(ticket.createdAt);
   if (ticket.fecha) return new Date(ticket.fecha);
@@ -314,6 +362,25 @@ export const sendMail = functions.https.onRequest(async (req, res) => {
     let recipients = [];
     try {
       recipients = await sendTicketEmail(body, { actionMsg: body.actionMsg, subject: body.subject, rawHtml: body.html, to: Array.isArray(body.to) ? body.to : null, cc: Array.isArray(body.cc) ? body.cc : null, extraRecipients: body.extraRecipients });
+      
+      // Enviar notificación push también
+      const pushTitle = body.subject || `Ticket ${body.estado}: ${body.tipo}`;
+      const pushBody = body.actionMsg || `El ticket "${body.tipo}" ha cambiado a estado: ${body.estado}`;
+      const pushData = {
+        ticketId: String(body.ticketId || ''),
+        status: String(body.estado || ''),
+        click_action: body.ticketId ? `/tickets/${body.ticketId}` : '/tickets'
+      };
+      
+      // Combinar To y Cc para asegurar que todos reciban el push
+      const allPushRecipients = [...new Set([
+        ...recipients,
+        ...(Array.isArray(body.cc) ? body.cc.filter(Boolean) : [])
+      ])];
+      
+      // No bloqueamos la respuesta por el push
+      sendPushToUsers(allPushRecipients, pushTitle, pushBody, pushData).catch(e => console.error('Error push async:', e));
+
       res.json({ ok: true, sent: recipients.length, recipients });
     } catch (innerErr) {
       console.error('sendMail -> sendTicketEmail error', innerErr && innerErr.stack ? innerErr.stack : innerErr);
@@ -457,6 +524,12 @@ export const slaWarningScheduler = functions.pubsub.schedule('every 1 hours').on
           // enviar
           sendPromises.push((async () => {
             await client.api(`/users/${senderId}/sendMail`).post(mail);
+
+            // Enviar notificación push también
+            const pushBody = `El ticket "${ticket.tipo}" tiene aproximadamente ${Math.round(remaining)} horas restantes antes de incumplir el SLA.`;
+            const pushData = { ticketId: String(id), type: 'SLA_WARNING', click_action: `/tickets/${id}` };
+            await sendPushToUsers(recipients, 'Aviso: SLA en riesgo', pushBody, pushData).catch(e => console.error('Error push sla:', e));
+
             // marcar ticket
             await db.ref(`tickets/${id}/slaWarningSentAt`).set(Date.now());
             console.log('Advertencia enviada para ticket', id);
