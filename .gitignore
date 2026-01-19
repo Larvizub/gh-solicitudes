@@ -31,3 +31,4 @@ dist-ssr
 # Firebase files
 .firebase/
 .firebaserc
+firebase.json
