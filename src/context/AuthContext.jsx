@@ -481,6 +481,37 @@ export function AuthProvider({ children }) {
 
   const logout = () => signOut(auth);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const INACTIVITY_TIME = 2 * 60 * 60 * 1000; // 2 horas
+    const CHECK_INTERVAL = 60000; // Revisar cada minuto
+
+    const updateActivity = () => {
+      localStorage.setItem('gh_last_activity', Date.now().toString());
+    };
+
+    const checkInactivity = () => {
+      const lastActivity = parseInt(localStorage.getItem('gh_last_activity') || '0', 10);
+      const now = Date.now();
+      if (now - lastActivity > INACTIVITY_TIME) {
+        console.warn('Cerrando sesión por inactividad.');
+        logout();
+      }
+    };
+
+    updateActivity();
+    const interval = setInterval(checkInactivity, CHECK_INTERVAL);
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+
+    events.forEach(e => window.addEventListener(e, updateActivity));
+
+    return () => {
+      clearInterval(interval);
+      events.forEach(e => window.removeEventListener(e, updateActivity));
+    };
+  }, [user]);
+
   return (
     <AuthContext.Provider value={{ user, userData, loading, logout, dbAccessError }}>
       {children}
