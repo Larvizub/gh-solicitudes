@@ -479,7 +479,10 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('userProfileUpdated', handler);
   }, [user, db, RECINTO_DB_MAP]);
 
-  const logout = () => signOut(auth);
+  const logout = () => {
+    localStorage.removeItem('gh_last_activity');
+    return signOut(auth);
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -492,23 +495,36 @@ export function AuthProvider({ children }) {
     };
 
     const checkInactivity = () => {
-      const lastActivity = parseInt(localStorage.getItem('gh_last_activity') || '0', 10);
+      const lastActivityStr = localStorage.getItem('gh_last_activity');
+      if (!lastActivityStr) {
+        updateActivity();
+        return;
+      }
+
+      const lastActivity = parseInt(lastActivityStr, 10);
       const now = Date.now();
+      
       if (now - lastActivity > INACTIVITY_TIME) {
-        console.warn('Cerrando sesión por inactividad.');
+        console.warn('Cerrando sesión por inactividad prolongada (incluso con pestaña cerrada).');
         logout();
       }
     };
 
-    updateActivity();
+    // Verificar inactividad INMEDIATAMENTE al detectar el usuario (útil para cuando se reabre la pestaña)
+    checkInactivity();
+
     const interval = setInterval(checkInactivity, CHECK_INTERVAL);
     const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
 
-    events.forEach(e => window.addEventListener(e, updateActivity));
+    const handleUserActivity = () => {
+      updateActivity();
+    };
+
+    events.forEach(e => window.addEventListener(e, handleUserActivity));
 
     return () => {
       clearInterval(interval);
-      events.forEach(e => window.removeEventListener(e, updateActivity));
+      events.forEach(e => window.removeEventListener(e, handleUserActivity));
     };
   }, [user]);
 

@@ -191,6 +191,7 @@ export default function Login() {
       try { setRecinto(selectedRecinto); } catch (e) { void e; }
 
       const cred = await signInWithEmailAndPassword(auth, email, password);
+      localStorage.setItem('gh_last_activity', Date.now().toString());
 
       // check usuarios/{uid}
       try {
@@ -262,6 +263,7 @@ export default function Login() {
       try { setRecinto(selectedRecinto); } catch (e) { void e; }
       try { localStorage.setItem('selectedRecinto', selectedRecinto); } catch (e) { void e; }
       const result = await signInWithPopup(auth, msProvider);
+      localStorage.setItem('gh_last_activity', Date.now().toString());
       const userEmail = result?.user?.email?.toLowerCase();
       if (!isEmailAllowedForRecinto(userEmail, selectedRecinto)) {
         // Si es Corporativo, verificar autorización adicional en DB

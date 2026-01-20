@@ -179,6 +179,7 @@ export default function Register() {
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      localStorage.setItem('gh_last_activity', Date.now().toString());
       await updateProfile(userCredential.user, { displayName: `${nombre} ${apellido}` });
       // Guardar usuario en la base de datos seleccionada por el formulario
       const dbInstance = await getDbForRecinto(targetRecinto);
