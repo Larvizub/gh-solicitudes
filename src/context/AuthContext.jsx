@@ -52,6 +52,8 @@ const isEmailAllowedForRecinto = (email, recintoKey) => {
   return false;
 };
 
+const INACTIVITY_TIME = 2 * 60 * 60 * 1000; // 2 horas
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -61,14 +63,44 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Verificación de inactividad inmediata antes de proceder con la carga de datos
+      if (firebaseUser) {
+        try {
+          const lastActivityStr = localStorage.getItem('gh_last_activity');
+          if (lastActivityStr) {
+            const lastActivity = parseInt(lastActivityStr, 10);
+            const now = Date.now();
+            if (now - lastActivity > INACTIVITY_TIME) {
+              console.warn('Sesión expirada por inactividad prolongada (verificación inicial).');
+              localStorage.removeItem('gh_last_activity');
+              await signOut(auth);
+              setUser(null);
+              setUserData(null);
+              setLoading(false);
+              return;
+            }
+          } else {
+            // Si no hay registro de actividad pero hay usuario, lo inicializamos para empezar a contar
+            localStorage.setItem('gh_last_activity', Date.now().toString());
+          }
+        } catch (e) {
+          console.debug('Error verificando inactividad inicial:', e);
+        }
+      }
+
       setUser(firebaseUser);
       setDbAccessError(null);
 
-  const SUPER_ADMINS = ['admin@costaricacc.com', 'admin@grupoheroica.com'];
-  const SUPER_ADMIN_DOMAIN = 'grupoheroica.com';
-  const emailLower = String(firebaseUser?.email || '').toLowerCase();
+      if (!firebaseUser) {
+        setUserData(null);
+        setLoading(false);
+        return;
+      }
 
-  if (firebaseUser?.email && SUPER_ADMINS.includes(emailLower)) {
+      const SUPER_ADMINS = ['admin@costaricacc.com', 'admin@grupoheroica.com'];
+      const emailLower = String(firebaseUser.email || '').toLowerCase();
+
+      if (SUPER_ADMINS.includes(emailLower)) {
         const adminData = {
           nombre: firebaseUser.displayName || 'Admin',
           email: firebaseUser.email,
@@ -487,44 +519,64 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!user) return;
 
-    const INACTIVITY_TIME = 2 * 60 * 60 * 1000; // 2 horas
     const CHECK_INTERVAL = 60000; // Revisar cada minuto
 
     const updateActivity = () => {
-      localStorage.setItem('gh_last_activity', Date.now().toString());
+      try {
+        localStorage.setItem('gh_last_activity', Date.now().toString());
+      } catch (e) {
+        console.debug('Error actualizando actividad:', e);
+      }
     };
 
     const checkInactivity = () => {
-      const lastActivityStr = localStorage.getItem('gh_last_activity');
-      if (!lastActivityStr) {
-        updateActivity();
-        return;
-      }
+      try {
+        const lastActivityStr = localStorage.getItem('gh_last_activity');
+        if (!lastActivityStr) {
+          updateActivity();
+          return;
+        }
 
-      const lastActivity = parseInt(lastActivityStr, 10);
-      const now = Date.now();
-      
-      if (now - lastActivity > INACTIVITY_TIME) {
-        console.warn('Cerrando sesión por inactividad prolongada (incluso con pestaña cerrada).');
-        logout();
+        const lastActivity = parseInt(lastActivityStr, 10);
+        const now = Date.now();
+        
+        if (now - lastActivity > INACTIVITY_TIME) {
+          console.warn('Cerrando sesión por inactividad prolongada.');
+          logout();
+        }
+      } catch (e) {
+        console.debug('Error comprobando inactividad:', e);
       }
     };
 
-    // Verificar inactividad INMEDIATAMENTE al detectar el usuario (útil para cuando se reabre la pestaña)
+    // Verificar inactividad al montar el efecto o cuando el usuario cambia
     checkInactivity();
 
     const interval = setInterval(checkInactivity, CHECK_INTERVAL);
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    const windowEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'focus'];
+    const documentEvents = ['visibilitychange'];
 
+    let lastUpdate = Date.now();
     const handleUserActivity = () => {
-      updateActivity();
+      const now = Date.now();
+      // Throttle para no saturar localStorage, actualizamos máximo cada 30 segundos
+      if (now - lastUpdate > 30000) {
+        updateActivity();
+        lastUpdate = now;
+      }
     };
 
-    events.forEach(e => window.addEventListener(e, handleUserActivity));
+    const handleCheckOnEvent = () => {
+      checkInactivity();
+    };
+
+    windowEvents.forEach(e => window.addEventListener(e, handleUserActivity, { passive: true }));
+    documentEvents.forEach(e => document.addEventListener(e, handleCheckOnEvent, { passive: true }));
 
     return () => {
       clearInterval(interval);
-      events.forEach(e => window.removeEventListener(e, handleUserActivity));
+      windowEvents.forEach(e => window.removeEventListener(e, handleUserActivity));
+      documentEvents.forEach(e => document.removeEventListener(e, handleCheckOnEvent));
     };
   }, [user]);
 
