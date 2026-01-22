@@ -1,9 +1,24 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { useTheme } from '@mui/material/styles';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import {
+  Box, Typography, Paper, Button, Grid, TextField, MenuItem, CircularProgress, Snackbar, Alert, Chip, IconButton,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination, InputAdornment, useTheme
+} from '@mui/material';
+import { ref, get } from 'firebase/database';
+import { useDb } from '../context/DbContext';
+import { getDbForRecinto } from '../firebase/multiDb';
+import { useAuth } from '../context/useAuth';
+import workingMsBetween from '../utils/businessHours';
+import { calculateSlaRemaining } from '../utils/slaCalculator';
+import { saveAs } from 'file-saver';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
 import { ReportesPieChart, ReportesBarChart, ReportesLineChart, ReportesAreaChart, ReportesHorizontalBarChart } from './ReportesCharts';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import TableChartIcon from '@mui/icons-material/TableChart';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { ModuleContainer, PageHeader, GlassCard, SectionContainer } from '../components/ui/SharedStyles';
 import { gradients } from '../components/ui/sharedStyles.constants';
 import useNotification from '../context/useNotification';
@@ -27,21 +42,29 @@ class DataGridErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
-import {
-  Box, Typography, Paper, Button, Grid, TextField, MenuItem, CircularProgress, Snackbar, Alert, Chip, IconButton,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination
-} from '@mui/material';
-import { ref, get } from 'firebase/database';
-import { useDb } from '../context/DbContext';
-import { getDbForRecinto } from '../firebase/multiDb';
-import { useAuth } from '../context/useAuth';
-import workingMsBetween from '../utils/businessHours';
-import { calculateSlaRemaining } from '../utils/slaCalculator';
-// (msToHoursMinutes removed — Reportes now shows decimal hours)
-import { saveAs } from 'file-saver';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+
+// Helper para parsear timestamps variados (reutilizable)
+const parseAnyTimestamp = (v) => {
+  if (v === undefined || v === null) return null;
+  if (typeof v === 'number') return v < 1e12 ? v * 1000 : v;
+  if (typeof v === 'string') {
+    // Intentar parsear como fecha ISO primero (más robusto para strings con '-')
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return d.getTime();
+    // Si no es una fecha, intentar parsear como número (segundos o ms)
+    const n = parseInt(v, 10);
+    if (!isNaN(n)) return n < 1e12 ? n * 1000 : n;
+    return null;
+  }
+  if (typeof v === 'object') {
+    if (v.seconds) return Number(v.seconds) * 1000;
+    if (v._seconds) return Number(v._seconds) * 1000;
+    if (v.toMillis) {
+      try { return v.toMillis(); } catch { return null; }
+    }
+  }
+  return null;
+};
 
 export default function Reportes() {
   // Refs para los gráficos (todos los mostrados en UI)
@@ -54,7 +77,7 @@ export default function Reportes() {
   const monthlyRef = useRef();
   const { db: ctxDb, recinto } = useDb();
   const { userData } = useAuth();
-  const { notify } = useNotification();
+  const notify = useNotification();
   const [tickets, setTickets] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
   // SLA configuration states
@@ -67,6 +90,8 @@ export default function Reportes() {
   const [error, setError] = useState("");
   const [filtroDep, setFiltroDep] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
+  const [filtroFechaInicio, setFiltroFechaInicio] = useState('');
+  const [filtroFechaFin, setFiltroFechaFin] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   // Paginación de tabla
   const [page, setPage] = useState(0);
@@ -83,12 +108,31 @@ export default function Reportes() {
 
   // Filtros y datos para los gráficos
   const estados = ['Abierto', 'En Proceso', 'Cerrado'];
-  const ticketsFiltrados = tickets.filter(t =>
-    (!filtroDep || t.departamento === filtroDep) &&
-    (!filtroEstado || t.estado === filtroEstado)
-  );
+  const ticketsFiltrados = tickets.filter(t => {
+    const meetDep = !filtroDep || t.departamento === filtroDep;
+    const meetEstado = !filtroEstado || t.estado === filtroEstado;
+    let meetFecha = true;
+    if (filtroFechaInicio || filtroFechaFin) {
+      const ticketTs = parseAnyTimestamp(t.createdAt || t.fecha || t.timestamp || t.createdAtTimestamp || t.createdAtMillis);
+      if (ticketTs) {
+        if (filtroFechaInicio) {
+          // Ajustar a inicio del día local
+          const start = new Date(filtroFechaInicio + 'T00:00:00').getTime();
+          if (ticketTs < start) meetFecha = false;
+        }
+        if (filtroFechaFin) {
+          // Ajustar a fin del día local
+          const end = new Date(filtroFechaFin + 'T23:59:59').getTime();
+          if (ticketTs > end) meetFecha = false;
+        }
+      } else {
+        meetFecha = false;
+      }
+    }
+    return meetDep && meetEstado && meetFecha;
+  });
   // Calcular duración de resolución por ticket (considerando pausas si existen)
-  const computeTicketResolutionMs = React.useCallback((t) => {
+  const computeTicketResolutionMs = useCallback((t) => {
     try {
       // obtener timestamps de creado y cerrado
       const createdCandidates = t.createdAt || t.fecha || t.timestamp || t.createdAtTimestamp || t.createdAtMillis;
@@ -160,10 +204,10 @@ export default function Reportes() {
       console.warn('Error computing duration for ticket', e);
       return null;
     }
-  }, [/* no external deps; parse util and workingMsBetween are stable imports */]);
+  }, []);
 
   // Debug helper: log resolution parsing for first few tickets to help diagnose missing values
-  React.useEffect(() => {
+  useEffect(() => {
     if (Array.isArray(tickets) && tickets.length) {
       try {
         tickets.slice(0, 5).forEach(t => {
@@ -173,29 +217,6 @@ export default function Reportes() {
   } catch { /* noop */ }
     }
   }, [tickets, computeTicketResolutionMs]);
-
-  // Helper para parsear timestamps variados (reutilizable)
-  const parseAnyTimestamp = (v) => {
-    if (v === undefined || v === null) return null;
-    if (typeof v === 'number') return v < 1e12 ? v * 1000 : v;
-    if (typeof v === 'string') {
-      // Intentar parsear como fecha ISO primero (más robusto para strings con '-')
-      const d = new Date(v);
-      if (!isNaN(d.getTime())) return d.getTime();
-      // Si no es una fecha, intentar parsear como número (segundos o ms)
-      const n = parseInt(v, 10);
-      if (!isNaN(n)) return n < 1e12 ? n * 1000 : n;
-      return null;
-    }
-    if (typeof v === 'object') {
-      if (v.seconds) return Number(v.seconds) * 1000;
-      if (v._seconds) return Number(v._seconds) * 1000;
-      if (v.toMillis) {
-        try { return v.toMillis(); } catch { return null; }
-      }
-    }
-    return null;
-  };
 
   
 
@@ -392,7 +413,7 @@ export default function Reportes() {
   };
 
   // Obtener solo las horas de SLA aplicables a un ticket (usa la misma lógica de prioridad que slaCalculator)
-  const computeSlaHoursForTicket = React.useCallback((ticket) => {
+  const computeSlaHoursForTicket = useCallback((ticket) => {
     try {
       const deptId = ticket._departamentoId || ticket.departamento;
       // intentar SLA por subcategoría
@@ -422,7 +443,7 @@ export default function Reportes() {
   
 
   // Helpers para resolver datos heterogéneos
-  const resolveDepartmentName = React.useCallback((depRaw) => {
+  const resolveDepartmentName = useCallback((depRaw) => {
     if (!depRaw) return '';
     // Si es objeto, probar campos comunes
     if (typeof depRaw === 'object') {
@@ -452,7 +473,7 @@ export default function Reportes() {
     return '';
   }, [departamentos]);
 
-  const resolveDateFromRow = React.useCallback((row) => {
+  const resolveDateFromRow = useCallback((row) => {
     if (!row) return '';
     const candidates = [row.fecha, row.createdAt, row.createdAtTimestamp, row.timestamp, row.createdAtMillis];
     let val = undefined;
@@ -489,7 +510,7 @@ export default function Reportes() {
   }, []);
 
   // Resolver un elemento del array asignados (puede ser id, email, objeto parcial)
-  const resolveAssignedEntry = React.useCallback((entry) => {
+  const resolveAssignedEntry = useCallback((entry) => {
     if (!entry) return '';
     // Si es objeto con datos ya legibles
     if (typeof entry === 'object') {
@@ -529,7 +550,7 @@ export default function Reportes() {
   }, [usuariosMap]);
 
   // Debug: mostrar el primer ticket y los valores resueltos en consola para diagnóstico UI
-  React.useEffect(() => {
+  useEffect(() => {
     if (tickets && tickets.length > 0) {
       console.log('Reportes debug - primer ticket raw:', tickets[0]);
       console.log('Reportes debug - departamento resuelto:', resolveDepartmentName(tickets[0].departamento));
@@ -539,7 +560,7 @@ export default function Reportes() {
 
   // Pre-calcular campos derivados para evitar errores en valueGetter cuando params es indefinido
   // Ordenar tickets por fecha de creación (más recientes primero)
-  const enrichedTickets = React.useMemo(() => {
+  const enrichedTickets = useMemo(() => {
     try {
       const copy = Array.isArray(ticketsFiltrados) ? [...ticketsFiltrados] : [];
       copy.sort((a, b) => {
@@ -890,7 +911,7 @@ export default function Reportes() {
       
       <SectionContainer title="Filtros" icon={FilterListIcon}>
         <Grid container spacing={2} alignItems="center">
-          <Grid gridColumn={{ xs: '1 / -1', sm: 'span 3', md: 'span 3' }} sx={{ minWidth: 220, maxWidth: 340, width: '100%' }}>
+          <Grid item xs={12} sm={3} md={3} sx={{ minWidth: 220, maxWidth: 340 }}>
             <TextField
               select
               label="Departamento"
@@ -898,7 +919,6 @@ export default function Reportes() {
               onChange={e => setFiltroDep(e.target.value)}
               fullWidth
               size="small"
-              sx={{ minWidth: 220, maxWidth: 340 }}
             >
               <MenuItem value="">Todos</MenuItem>
               {departamentos.map(dep => (
@@ -906,7 +926,7 @@ export default function Reportes() {
               ))}
             </TextField>
           </Grid>
-          <Grid gridColumn={{ xs: '1 / -1', sm: 'span 3', md: 'span 3' }} sx={{ minWidth: 220, maxWidth: 340, width: '100%' }}>
+          <Grid item xs={12} sm={3} md={3} sx={{ minWidth: 220, maxWidth: 340 }}>
             <TextField
               select
               label="Estado"
@@ -914,7 +934,6 @@ export default function Reportes() {
               onChange={e => setFiltroEstado(e.target.value)}
               fullWidth
               size="small"
-              sx={{ minWidth: 220, maxWidth: 340 }}
             >
               <MenuItem value="">Todos</MenuItem>
               {estados.map(e => (
@@ -922,14 +941,74 @@ export default function Reportes() {
               ))}
             </TextField>
           </Grid>
-          <Grid gridColumn={{ xs: '1 / -1', sm: 'span 6', md: 'span 6' }} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, gap: 2 }}>
+          <Grid item xs={12} sm={3} md={3} sx={{ minWidth: 200, maxWidth: 340 }}>
+            <TextField
+              label="Fecha Inicio"
+              type="date"
+              value={filtroFechaInicio}
+              onChange={e => setFiltroFechaInicio(e.target.value)}
+              fullWidth
+              size="small"
+              InputLabelProps={{ shrink: true }}
+              sx={{ 
+                '& input::-webkit-calendar-picker-indicator': {
+                  opacity: 1,
+                  cursor: 'pointer'
+                }
+              }}
+              inputProps={{
+                onClick: (e) => (e.target.showPicker && e.target.showPicker())
+              }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end" sx={{ cursor: 'pointer' }} onClick={(e) => {
+                    const input = e.currentTarget.parentElement.querySelector('input');
+                    if (input && input.showPicker) input.showPicker();
+                  }}>
+                    <CalendarMonthIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={3} md={3} sx={{ minWidth: 200, maxWidth: 340 }}>
+            <TextField
+              label="Fecha Fin"
+              type="date"
+              value={filtroFechaFin}
+              onChange={e => setFiltroFechaFin(e.target.value)}
+              fullWidth
+              size="small"
+              InputLabelProps={{ shrink: true }}
+              sx={{ 
+                '& input::-webkit-calendar-picker-indicator': {
+                  opacity: 1,
+                  cursor: 'pointer'
+                }
+              }}
+              inputProps={{
+                onClick: (e) => (e.target.showPicker && e.target.showPicker())
+              }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end" sx={{ cursor: 'pointer' }} onClick={(e) => {
+                    const input = e.currentTarget.parentElement.querySelector('input');
+                    if (input && input.showPicker) input.showPicker();
+                  }}>
+                    <CalendarMonthIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, gap: 2, mt: { xs: 1, md: 0 } }}>
             <Button 
               variant="contained" 
               onClick={handleExportExcel} 
               sx={{ 
                 minWidth: 140, 
                 color: '#fff',
-                background: gradients.success,
+                background: typeof gradients.success === 'function' ? gradients.success(theme) : gradients.success,
                 fontWeight: 600,
                 '&:hover': { opacity: 0.9, color: '#fff' }
               }}
@@ -943,7 +1022,7 @@ export default function Reportes() {
               sx={{ 
                 minWidth: 140, 
                 color: '#fff',
-                background: gradients.error,
+                background: typeof gradients.error === 'function' ? gradients.error(theme) : gradients.error,
                 fontWeight: 600,
                 '&:hover': { opacity: 0.9, color: '#fff' }
               }}
