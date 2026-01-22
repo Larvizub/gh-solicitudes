@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+ import React, { useEffect, useState } from 'react';
 import useNotification from '../context/useNotification';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getEventByNumber } from '../services/skillService';
 import { Box, Typography, Button, TextField, MenuItem, Alert, Paper, Chip, Autocomplete, Snackbar, Tooltip, IconButton, Divider, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, alpha, useTheme, Avatar, Fade, Grow } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
@@ -65,7 +66,18 @@ export default function TicketPage() {
   const [reassignMode, setReassignMode] = useState(false);
 
   const [form, setForm] = useState({
-  departamento: '', tipo: '', subcategoria: '', descripcion: '', estado: 'Abierto', usuario: '', usuarioEmail: '', adjuntoUrl: '', adjuntoNombre: '', asignados: [],
+    departamento: '', 
+    tipo: '', 
+    subcategoria: '', 
+    descripcion: '', 
+    estado: 'Abierto', 
+    usuario: '', 
+    usuarioEmail: '', 
+    adjuntoUrl: '', 
+    adjuntoNombre: '', 
+    asignados: [],
+    eventId: '',
+    eventName: ''
   });
 
   // Pausa / reanudar control
@@ -353,6 +365,41 @@ export default function TicketPage() {
       })();
   } catch { /* ignore */ }
   }, [ticketKey, form, canInitiate, isNew, autoInitiatedForKey, handleInitiate]);
+
+
+  // Effect para buscar evento en Skill API cuando el departamento es 'Planeación de Eventos'
+  useEffect(() => {
+    const selectedDeptObj = departamentos.find(d => String(d.id) === String(form.departamento) || String(d.nombre) === String(form.departamento));
+    const isPlaneacion = selectedDeptObj?.nombre === 'Planeación de Eventos' || String(form.departamento) === 'Planeación de Eventos';
+    
+    // Si no es el departamento correcto o no hay ID, limpiamos el nombre
+    if (!isPlaneacion || !form.eventId) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const eventNum = parseInt(form.eventId, 10);
+        if (isNaN(eventNum)) {
+          setForm(f => ({ ...f, eventName: 'ID inválido' }));
+          return;
+        }
+
+        setForm(f => ({ ...f, eventName: 'Buscando...' }));
+        const event = await getEventByNumber(eventNum, recinto);
+        if (event) {
+          setForm(f => ({ ...f, eventName: event.title || 'Sin título' }));
+        } else {
+          setForm(f => ({ ...f, eventName: 'Evento no encontrado' }));
+        }
+      } catch (err) {
+        console.warn('Skill API Error:', err);
+        setForm(f => ({ ...f, eventName: 'Error al buscar' }));
+      }
+    }, 1000); // Debounce de 1s
+
+    return () => clearTimeout(timer);
+  }, [form.eventId, form.departamento, departamentos, recinto]);
 
 
   // cargar motivos de pausa cuando cambia el departamento seleccionado (o cuando carga contexto DB)
@@ -1480,6 +1527,47 @@ export default function TicketPage() {
               </Tooltip>
             </Box>
           )}
+          {(() => {
+            const selectedDeptObj = departamentos.find(d => String(d.id) === String(form.departamento) || String(d.nombre) === String(form.departamento));
+            const isPlaneacion = selectedDeptObj?.nombre === 'Planeación de Eventos' || String(form.departamento) === 'Planeación de Eventos';
+            if (!isPlaneacion) return null;
+            return (
+              <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                <Box sx={{ flex: 1 }}>
+                  <TextField
+                    label="ID de Evento"
+                    value={form.eventId}
+                    onChange={e => setForm(f => ({ ...f, eventId: e.target.value }))}
+                    disabled={saving || (!isNew && !isAdmin)}
+                    fullWidth
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        backgroundColor: theme => theme.palette.background.paper,
+                        '&:hover': { backgroundColor: theme => theme.palette.action.hover },
+                        '&.Mui-focused': { backgroundColor: theme => theme.palette.background.paper }
+                      }
+                    }}
+                  />
+                </Box>
+                <Box sx={{ flex: 2 }}>
+                  <TextField
+                    label="Nombre del evento"
+                    value={form.eventName}
+                    inputProps={{ readOnly: true }}
+                    fullWidth
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        backgroundColor: theme => theme.palette.background.paper,
+                        '& .MuiInputBase-input': { color: 'text.secondary' }
+                      }
+                    }}
+                  />
+                </Box>
+              </Box>
+            );
+          })()}
           <TextField
             label="Descripción"
             multiline

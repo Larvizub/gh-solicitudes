@@ -548,3 +548,59 @@ export const slaWarningScheduler = functions.pubsub.schedule('every 1 hours').on
   }
 });
 
+
+export const skillApiProxy = functions.https.onRequest(async (req, res) => {
+  // CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, idData, companyAuthId');
+    return res.status(204).send('');
+  }
+
+  try {
+    // El path viene después de /skill-api/ debido al rewrite en firebase.json
+    // Por ejemplo: /skill-api/authenticate -> req.path será /authenticate
+    const targetPath = req.path.replace(/^\/skill-api/, '') || '/';
+    const SKILL_BASE_URL = 'https://grupoheroicaapi.skillsuite.net/app/wssuite/api';
+    const targetUrl = `${SKILL_BASE_URL}${targetPath}`;
+
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    
+    // Pasar headers específicos de Skill si vienen en la petición (normalizar a minúsculas para seguridad)
+    const authHeader = req.headers['authorization'];
+    const idDataHeader = req.headers['iddata'];
+    const companyAuthIdHeader = req.headers['companyauthid'];
+
+    if (authHeader) headers['Authorization'] = authHeader;
+    if (idDataHeader) headers['idData'] = idDataHeader;
+    if (companyAuthIdHeader) headers['companyAuthId'] = companyAuthIdHeader;
+
+    console.log(`Proxying ${req.method} to ${targetUrl} with headersKeys:`, Object.keys(headers));
+
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      headers: headers,
+      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
+    });
+
+    const contentType = response.headers.get('content-type');
+    const status = response.status;
+
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      return res.status(status).json(data);
+    } else {
+      const text = await response.text();
+      return res.status(status).send(text);
+    }
+  } catch (error) {
+    console.error('SkillProxy Error:', error);
+    return res.status(500).send(error.message);
+  }
+});
+
+
+
