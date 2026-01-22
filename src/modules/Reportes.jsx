@@ -473,6 +473,17 @@ export default function Reportes() {
     return '';
   }, [departamentos]);
 
+  // Determine if we should show event fields (Planning Events)
+  const showEventFields = useMemo(() => {
+    const userDept = resolveDepartmentName(userData?.departamento);
+    // User is from Planning Events
+    if (userDept === 'Planeación de Eventos') return true;
+    // Or Admin filtering by Planning Events
+    const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
+    if (isAdmin && resolveDepartmentName(filtroDep) === 'Planeación de Eventos') return true;
+    return false;
+  }, [userData, filtroDep, resolveDepartmentName]);
+
   const resolveDateFromRow = useCallback((row) => {
     if (!row) return '';
     const candidates = [row.fecha, row.createdAt, row.createdAtTimestamp, row.timestamp, row.createdAtMillis];
@@ -677,7 +688,7 @@ export default function Reportes() {
         } catch { usuarioAsignado = '' }
 
         // Return object (not relied on for column order). We'll build sheet with explicit column order below.
-        return {
+        const rowData = {
           'Departamento': resolveDepartmentName(t.departamento),
           'Categoría': t.tipo || '',
           'Estado': t.estado || '',
@@ -687,28 +698,47 @@ export default function Reportes() {
           'Fecha': resolveDateFromRow(t),
           'Horas cierre (h)': tiempoLaboral,
           'Adjunto': (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
-    'Reasignados': asignadosTexto,
+          'Reasignados': asignadosTexto,
           'Última Reasignación': lastReassignAt,
         };
+        if (showEventFields) {
+          rowData['Id de evento'] = t.eventId || '';
+          rowData['Nombre del evento'] = t.eventName || '';
+        }
+        return rowData;
       });
       // Build an array-of-arrays (AOA) to guarantee column order matches the DataGrid table
-  const headers = ['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Reasignados', 'Última Reasignación'];
-  // Build rows explicitly to guarantee column order matches the DataGrid table
-  const rows = [headers];
+      // Base headers
+      const headers = ['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario'];
+      // Event fields if applicable (after Usuario)
+      if (showEventFields) {
+        headers.push('Id de evento', 'Event Name');
+      }
+      // Remaining headers
+      headers.push('Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Reasignados', 'Última Reasignación');
+      
+      // Build rows explicitly to guarantee column order matches the DataGrid table
+      const rows = [headers];
       data.forEach(d => {
-        rows.push([
+        const row = [
           d['Departamento'] || '',
           d['Categoría'] || '',
           d['Estado'] || '',
           d['SLA Restante'] || '',
           d['Usuario'] || '',
+        ];
+        if (showEventFields) {
+          row.push(d['Id de evento'] || '', d['Nombre del evento'] || '');
+        }
+        row.push(
           d['Usuario Asignado'] || '',
           d['Fecha'] || '',
           d['Horas cierre (h)'] || '',
           d['Adjunto'] || '',
           d['Reasignados'] || '',
           d['Última Reasignación'] || ''
-        ]);
+        );
+        rows.push(row);
       });
       const ws = XLSX.utils.aoa_to_sheet(rows);
       const wb = XLSX.utils.book_new();
@@ -857,26 +887,39 @@ export default function Reportes() {
         } catch { usuarioAsignado = '' }
         const hasAdj = (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) ? 'Sí' : '';
   // Order must match DataGrid columns: Departamento, Categoría, Estado, Vencimiento, Usuario, Usuario Asignado, Fecha, Horas cierre (h), Adjunto, Asignados, Última Reasignación
-        return [
+        const row = [
           resolveDepartmentName(t.departamento),
           t.tipo || '',
           t.estado || '',
           slaText,
           t.usuario || '',
+        ];
+        if (showEventFields) {
+          row.push(t.eventId || '', t.eventName || '');
+        }
+        row.push(
           usuarioAsignado || (t.usuario || ''),
           resolveDateFromRow(t),
           tiempoLaboral,
           hasAdj,
           asignadosTexto,
-          lastReassignAt,
-        ];
+          lastReassignAt
+        );
+        return row;
       });
 
       if (typeof autoTable !== 'function') {
         throw new Error('AutoTable plugin no disponible');
       }
+
+    const pdfHeaders = ['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario'];
+    if (showEventFields) {
+      pdfHeaders.push('Id de evento', 'Nombre del evento');
+    }
+    pdfHeaders.push('Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Reasignados', 'Última Reasignación');
+
     autoTable(doc, {
-  head: [['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario', 'Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Reasignados', 'Última Reasignación']],
+      head: [pdfHeaders],
         body: bodyData,
         startY: cursorY,
         margin: { left: 40, right: 40 },
@@ -1050,6 +1093,8 @@ export default function Reportes() {
                       <TableCell><strong>Categoría</strong></TableCell>
                       <TableCell><strong>Estado</strong></TableCell>
                       <TableCell><strong>Usuario</strong></TableCell>
+                      {showEventFields && <TableCell><strong>Id de evento</strong></TableCell>}
+                      {showEventFields && <TableCell><strong>Nombre del evento</strong></TableCell>}
                       <TableCell><strong>Usuario Asignado</strong></TableCell>
                       <TableCell><strong>Fecha</strong></TableCell>
                       <TableCell><strong>Horas cierre (h)</strong></TableCell>
@@ -1063,6 +1108,8 @@ export default function Reportes() {
                         <TableCell>{row.tipo || ''}</TableCell>
                         <TableCell>{row.estado || ''}</TableCell>
                         <TableCell>{row.usuario || ''}</TableCell>
+                        {showEventFields && <TableCell>{row.eventId || ''}</TableCell>}
+                        {showEventFields && <TableCell>{row.eventName || ''}</TableCell>}
                         <TableCell style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.usuarioAsignado || ''}</TableCell>
                         <TableCell>{resolveDateFromRow(row)}</TableCell>
                         <TableCell>
