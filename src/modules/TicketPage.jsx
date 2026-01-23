@@ -109,6 +109,11 @@ export default function TicketPage() {
   const [showEmailInput, setShowEmailInput] = useState(false);
 
   const isAdmin = (userData?.isSuperAdmin || userData?.rol === 'admin');
+  const isPlaneacion = React.useMemo(() => {
+    const selectedDeptObj = departamentos.find(d => String(d.id) === String(form.departamento) || String(d.nombre) === String(form.departamento));
+    return selectedDeptObj?.nombre === 'Planeación de Eventos' || String(form.departamento) === 'Planeación de Eventos';
+  }, [form.departamento, departamentos]);
+
   const canDelete = !isNew && (isAdmin || (user?.email && form?.usuarioEmail && String(form.usuarioEmail).toLowerCase() === String(user.email).toLowerCase()));
   // el creador del ticket (usuario que lo abrió) puede cerrar su propio ticket
   const isCreator = !!(form?.usuarioEmail && user?.email && String(form.usuarioEmail).toLowerCase() === String(user.email).toLowerCase());
@@ -369,11 +374,11 @@ export default function TicketPage() {
 
   // Effect para buscar evento en Skill API cuando el departamento es 'Planeación de Eventos'
   useEffect(() => {
-    const selectedDeptObj = departamentos.find(d => String(d.id) === String(form.departamento) || String(d.nombre) === String(form.departamento));
-    const isPlaneacion = selectedDeptObj?.nombre === 'Planeación de Eventos' || String(form.departamento) === 'Planeación de Eventos';
-    
     // Si no es el departamento correcto o no hay ID, limpiamos el nombre
     if (!isPlaneacion || !form.eventId) {
+      if (!isPlaneacion && form.eventName) {
+        setForm(f => ({ ...f, eventName: '', eventId: '' }));
+      }
       return;
     }
 
@@ -399,7 +404,7 @@ export default function TicketPage() {
     }, 1000); // Debounce de 1s
 
     return () => clearTimeout(timer);
-  }, [form.eventId, form.departamento, departamentos, recinto]);
+  }, [form.eventId, form.departamento, departamentos, recinto, form.eventName, isPlaneacion]);
 
 
   // cargar motivos de pausa cuando cambia el departamento seleccionado (o cuando carga contexto DB)
@@ -883,6 +888,10 @@ export default function TicketPage() {
     if (saving) return; // prevenir doble click
     if (!form.departamento || !form.tipo || !form.subcategoria || !form.descripcion.trim()) {
       try { notify('Todos los campos son obligatorios', 'error', { mode: 'toast', persist: true }); } catch { setError('Todos los campos son obligatorios'); }
+      return;
+    }
+    if (isPlaneacion && !form.eventId) {
+      try { notify('El ID de Evento es obligatorio para Planeación de Eventos', 'error', { mode: 'toast', persist: true }); } catch { setError('El ID de Evento es obligatorio para Planeación de Eventos'); }
       return;
     }
     setError('');
@@ -1539,6 +1548,9 @@ export default function TicketPage() {
                     value={form.eventId}
                     onChange={e => setForm(f => ({ ...f, eventId: e.target.value }))}
                     disabled={saving || (!isNew && !isAdmin)}
+                    required={isPlaneacion}
+                    error={isPlaneacion && !form.eventId}
+                    helperText={isPlaneacion && !form.eventId ? 'Requerido para Planeación de Eventos' : ''}
                     fullWidth
                     sx={{
                       '& .MuiOutlinedInput-root': {
