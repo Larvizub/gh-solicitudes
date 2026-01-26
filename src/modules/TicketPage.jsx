@@ -290,6 +290,8 @@ export default function TicketPage() {
               adjuntoNombre: t.adjuntoNombre || '',
               asignados: t.asignados || [],
               codigo: t.codigo || '',
+              eventId: t.eventId || '',
+              eventName: t.eventName || '',
               // Migrar adjunto antiguo a arreglo attachments si no existe
               attachments: Array.isArray(t.attachments)
                 ? t.attachments
@@ -374,11 +376,9 @@ export default function TicketPage() {
 
   // Effect para buscar evento en Skill API cuando el departamento es 'Planeación de Eventos'
   useEffect(() => {
-    // Si no es el departamento correcto o no hay ID, limpiamos el nombre
+    console.log('useEffect ejecutado para buscar evento:', { isPlaneacion, eventId: form.eventId, departamento: form.departamento, recinto });
+    // Si no es el departamento correcto o no hay ID, no hacer nada
     if (!isPlaneacion || !form.eventId) {
-      if (!isPlaneacion && form.eventName) {
-        setForm(f => ({ ...f, eventName: '', eventId: '' }));
-      }
       return;
     }
 
@@ -391,20 +391,22 @@ export default function TicketPage() {
         }
 
         setForm(f => ({ ...f, eventName: 'Buscando...' }));
+        console.log('Buscando evento:', { eventNum, recinto });
         const event = await getEventByNumber(eventNum, recinto);
+        console.log('Resultado de búsqueda:', event);
         if (event) {
           setForm(f => ({ ...f, eventName: event.title || 'Sin título' }));
         } else {
-          setForm(f => ({ ...f, eventName: 'Evento no encontrado' }));
+          setForm(f => ({ ...f, eventName: `Evento no encontrado (ID: ${eventNum})` }));
         }
       } catch (err) {
         console.warn('Skill API Error:', err);
-        setForm(f => ({ ...f, eventName: 'Error al buscar' }));
+        setForm(f => ({ ...f, eventName: `Error al buscar: ${err.message || 'Desconocido'}` }));
       }
     }, 1000); // Debounce de 1s
 
     return () => clearTimeout(timer);
-  }, [form.eventId, form.departamento, departamentos, recinto, form.eventName, isPlaneacion]);
+  }, [form.eventId, form.departamento, departamentos, recinto, isPlaneacion]);
 
 
   // cargar motivos de pausa cuando cambia el departamento seleccionado (o cuando carga contexto DB)
@@ -890,9 +892,13 @@ export default function TicketPage() {
       try { notify('Todos los campos son obligatorios', 'error', { mode: 'toast', persist: true }); } catch { setError('Todos los campos son obligatorios'); }
       return;
     }
-    if (isPlaneacion && !form.eventId) {
+    if (isPlaneacion && !form.eventId && (isNew || !isAdmin)) {
       try { notify('El ID de Evento es obligatorio para Planeación de Eventos', 'error', { mode: 'toast', persist: true }); } catch { setError('El ID de Evento es obligatorio para Planeación de Eventos'); }
       return;
+    }
+    if (isPlaneacion && !form.eventId && !isNew && isAdmin) {
+      // Advertencia para admin en tickets existentes sin ID
+      try { notify('Advertencia: El ticket no tiene ID de Evento. Considere agregarlo para una mejor gestión.', 'warning', { mode: 'toast', persist: false }); } catch { /* ignore */ }
     }
     setError('');
   setSaving(true);
@@ -1549,8 +1555,8 @@ export default function TicketPage() {
                     onChange={e => setForm(f => ({ ...f, eventId: e.target.value }))}
                     disabled={saving || (!isNew && !isAdmin)}
                     required={isPlaneacion}
-                    error={isPlaneacion && !form.eventId}
-                    helperText={isPlaneacion && !form.eventId ? 'Requerido para Planeación de Eventos' : ''}
+                    error={isPlaneacion && !form.eventId && (isNew || !isAdmin)}
+                    helperText={isPlaneacion && !form.eventId && (isNew || !isAdmin) ? 'Requerido para Planeación de Eventos' : ''}
                     fullWidth
                     sx={{
                       '& .MuiOutlinedInput-root': {
