@@ -86,6 +86,7 @@ export default function TicketPage() {
   const [isPausedState, setIsPausedState] = useState(false);
   const [ticketKey, setTicketKey] = useState(null); // actual firebase key for the ticket (may differ from URL id)
   const [originalEstado, setOriginalEstado] = useState(null);
+  const [originalEventId, setOriginalEventId] = useState('');
   const [pauseReasonId, setPauseReasonId] = useState('');
   const [pauseComment, setPauseComment] = useState('');
   const [pauseLoading, setPauseLoading] = useState(false);
@@ -160,6 +161,22 @@ export default function TicketPage() {
       return false;
     }
   }, [form?.departamento, departamentos, usuarios, userDepartamento, userData, user]);
+
+  // Usuarios de Comercial o Planeación pueden editar el ID de Evento aun si no son creadores
+  const canEditEventId = React.useMemo(() => {
+    try {
+      if (isNew) return true; // nuevo ticket -> puede definir ID
+      if (isAdmin) return true; // admin siempre
+      if (isCreator) return true; // quien creó puede editar
+      const raw = String(userDepartamento || '').toLowerCase();
+      if (!raw) return false;
+      const normalized = raw.normalize && raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-_.]/g, '') || raw;
+      // Permitimos si el nombre del departamento contiene 'planeacion' o 'comercial' (flexible con acentos y variantes)
+      return normalized.includes('planeacion') || normalized.includes('planeaciondeeventos') || normalized.includes('comercial') || normalized.includes('venta') || normalized.includes('ventas');
+    } catch {
+      return false;
+    }
+  }, [isNew, isAdmin, isCreator, userDepartamento]);
 
   // Helper: puede iniciar si está asignado o es del mismo departamento
   const canInitiate = React.useMemo(() => {
@@ -297,6 +314,8 @@ export default function TicketPage() {
                 ? t.attachments
                 : (t.adjuntoUrl ? [{ url: t.adjuntoUrl, nombre: t.adjuntoNombre || 'Adjunto' }] : []),
             });
+            // Guardar eventId original para comparar cambios posteriores
+            setOriginalEventId(t.eventId || '');
             setOriginalEstado(t.estado || 'Abierto');
             // Guardar si el usuario estaba asignado originalmente (permite quitarse y aún guardar en la misma sesión de reasignación)
             try { setWasOriginallyAssigned(matchesAssignToUser(t, user)); } catch { /* ignore */ }
@@ -1002,9 +1021,33 @@ export default function TicketPage() {
           }
           const isAssignedPrev = matchesAssignToUser(prev, user);
           // permisos: admin, usuario asignado, creador o usuario del mismo departamento pueden modificar
+          // Excepción: permitir que usuarios de Comercial o Planeación (canEditEventId)
+          // actualicen únicamente el campo eventId incluso si no son del mismo departamento.
           if (!isAdmin && !isAssignedPrev && !(reassignMode && wasOriginallyAssigned) && !isCreator && !isSameDepartment) {
-            setError('No tienes permisos para modificar este ticket');
-            return;
+            // permitir excepción para cambios de eventId
+            if (canEditEventId && ticketData && ('eventId' in ticketData) && (ticketData.eventId !== prev.eventId)) {
+              try {
+                const evUpdate = { eventId: ticketData.eventId };
+                if ('eventName' in ticketData) evUpdate.eventName = ticketData.eventName || '';
+                await update(dbRef(dbInstance, `tickets/${dbTicketId}`), evUpdate);
+                // reflejar cambio localmente
+                setForm(f => ({ ...f, eventId: ticketData.eventId, eventName: ticketData.eventName || f.eventName }));
+                setOriginalEventId(ticketData.eventId || '');
+                setSnackbar({ open: true, message: 'ID de Evento actualizado', severity: 'success' });
+                shouldNotify = true;
+                // establecer ticketIdFinal para que la sección de notificaciones lo use
+                ticketIdFinal = ticketData.codigo || dbTicketId;
+                if (reassignMode) setReassignMode(false);
+                // continuar (no retornamos) para permitir envío de notificaciones después
+              } catch (err) {
+                console.warn('Fallo al actualizar eventId', err);
+                setError('No se pudo actualizar el ID de Evento');
+                return;
+              }
+            } else {
+              setError('No tienes permisos para modificar este ticket');
+              return;
+            }
           }
           // si es usuario asignado o del mismo departamento (no admin) (o estaba asignado originalmente y está en modo reasignación), permitir estado y (en modo reasignación) asignados/subcategoría
           if (!isAdmin && (isAssignedPrev || isSameDepartment || (reassignMode && wasOriginallyAssigned))) {
@@ -1553,7 +1596,7 @@ export default function TicketPage() {
                     label="ID de Evento"
                     value={form.eventId}
                     onChange={e => setForm(f => ({ ...f, eventId: e.target.value }))}
-                    disabled={saving || (!isNew && !isAdmin)}
+                    disabled={saving || !canEditEventId}
                     required={isPlaneacion}
                     error={isPlaneacion && !form.eventId && (isNew || !isAdmin)}
                     helperText={isPlaneacion && !form.eventId && (isNew || !isAdmin) ? 'Requerido para Planeación de Eventos' : ''}
@@ -2157,7 +2200,7 @@ export default function TicketPage() {
                   onClick={handleSave}
                   disabled={
                     (saving && !justSaved) ||
-                    (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || isCreator || (reassignMode && wasOriginallyAssigned) || isSameDepartment)) ||
+                    (!isNew && !isAdmin && !(matchesAssignToUser(form, user) || isCreator || (reassignMode && wasOriginallyAssigned) || isSameDepartment || (canEditEventId && form.eventId !== originalEventId))) ||
                     (originalEstado === 'Cerrado' && !isAdmin)
                   }
                   startIcon={isNew ? <AddIcon /> : <UpdateIcon />}
