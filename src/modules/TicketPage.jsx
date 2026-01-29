@@ -957,8 +957,9 @@ export default function TicketPage() {
       const ticketData = {
         ...form,
         attachments: allAttachments,
-        usuario: form.usuario || (userData?.nombre ? `${userData.nombre} ${userData.apellido || ''}`.trim() : (user?.email || '')),
-        usuarioEmail: user?.email || '',
+        // Mantener el creador original al actualizar; solo asignar usuario actual en creación de ticket
+        usuario: isNew ? (form.usuario || (userData?.nombre ? `${userData.nombre} ${userData.apellido || ''}`.trim() : (user?.email || ''))) : (form.usuario || ''),
+        usuarioEmail: isNew ? (user?.email || '') : (form.usuarioEmail || ''),
         estado: form.estado || 'Abierto',
         adjuntoUrl: adjUrl || '',
         adjuntoNombre: adjNombre || '',
@@ -1053,6 +1054,19 @@ export default function TicketPage() {
           if (!isAdmin && (isAssignedPrev || isSameDepartment || (reassignMode && wasOriginallyAssigned))) {
             const allowedUpdate = {};
             const changes = [];
+            // Permitir que miembros del mismo departamento (p.ej. Planeación de Eventos o Comercial)
+            // actualicen el ID de Evento cuando corresponda.
+            try {
+              const prevDeptRaw = prev && prev.departamento ? prev.departamento : '';
+              const normalizeDept = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-_.]/g, '');
+              const prevDeptNorm = normalizeDept(prevDeptRaw);
+              const allowEventEditByDept = prevDeptNorm.includes('planeacion') || prevDeptNorm.includes('comercial') || prevDeptNorm.includes('venta');
+              if (ticketData.eventId && ticketData.eventId !== prev.eventId && (canEditEventId || (isSameDepartment && allowEventEditByDept))) {
+                allowedUpdate.eventId = ticketData.eventId;
+                if ('eventName' in ticketData) allowedUpdate.eventName = ticketData.eventName || '';
+                changes.push('eventId');
+              }
+            } catch { /* ignore */ }
             if (ticketData.estado && ticketData.estado !== prev.estado) {
               allowedUpdate.estado = ticketData.estado;
               changes.push('estado');
