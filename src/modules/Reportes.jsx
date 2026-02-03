@@ -692,6 +692,7 @@ export default function Reportes() {
           'Departamento': resolveDepartmentName(t.departamento),
           'Categoría': t.tipo || '',
           'Subcategoría': t.subcategoria || '',
+          'Descripción': t.descripcion || '',
           'Estado': t.estado || '',
           'SLA Restante': slaText,
           'Usuario': t.usuario || '',
@@ -710,7 +711,7 @@ export default function Reportes() {
       });
       // Build an array-of-arrays (AOA) to guarantee column order matches the DataGrid table
       // Base headers
-      const headers = ['Departamento', 'Categoría', 'Subcategoría', 'Estado', 'SLA Restante', 'Usuario'];
+      const headers = ['Departamento', 'Categoría', 'Subcategoría', 'Descripción', 'Estado', 'SLA Restante', 'Usuario'];
       // Event fields if applicable (after Usuario)
       if (showEventFields) {
         headers.push('Id de evento', 'Event Name');
@@ -725,6 +726,7 @@ export default function Reportes() {
           d['Departamento'] || '',
           d['Categoría'] || '',
           d['Subcategoría'] || '',
+          d['Descripción'] || '',
           d['Estado'] || '',
           d['SLA Restante'] || '',
           d['Usuario'] || '',
@@ -893,6 +895,7 @@ export default function Reportes() {
           resolveDepartmentName(t.departamento),
           t.tipo || '',
           t.subcategoria || '',
+          t.descripcion || '',
           t.estado || '',
           slaText,
           t.usuario || '',
@@ -915,7 +918,7 @@ export default function Reportes() {
         throw new Error('AutoTable plugin no disponible');
       }
 
-    const pdfHeaders = ['Departamento', 'Categoría', 'Subcategoría', 'Estado', 'SLA Restante', 'Usuario'];
+    const pdfHeaders = ['Departamento', 'Categoría', 'Subcategoría', 'Descripción', 'Estado', 'SLA Restante', 'Usuario'];
     if (showEventFields) {
       pdfHeaders.push('Id de evento', 'Nombre del evento');
     }
