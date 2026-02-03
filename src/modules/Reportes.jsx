@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   Box, Typography, Paper, Button, Grid, TextField, MenuItem, CircularProgress, Snackbar, Alert, Chip, IconButton,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination, InputAdornment, useTheme
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination, InputAdornment, useTheme, Tooltip
 } from '@mui/material';
 import { ref, get } from 'firebase/database';
 import { useDb } from '../context/DbContext';
@@ -691,6 +691,7 @@ export default function Reportes() {
         const rowData = {
           'Departamento': resolveDepartmentName(t.departamento),
           'Categoría': t.tipo || '',
+          'Subcategoría': t.subcategoria || '',
           'Estado': t.estado || '',
           'SLA Restante': slaText,
           'Usuario': t.usuario || '',
@@ -709,7 +710,7 @@ export default function Reportes() {
       });
       // Build an array-of-arrays (AOA) to guarantee column order matches the DataGrid table
       // Base headers
-      const headers = ['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario'];
+      const headers = ['Departamento', 'Categoría', 'Subcategoría', 'Estado', 'SLA Restante', 'Usuario'];
       // Event fields if applicable (after Usuario)
       if (showEventFields) {
         headers.push('Id de evento', 'Event Name');
@@ -723,6 +724,7 @@ export default function Reportes() {
         const row = [
           d['Departamento'] || '',
           d['Categoría'] || '',
+          d['Subcategoría'] || '',
           d['Estado'] || '',
           d['SLA Restante'] || '',
           d['Usuario'] || '',
@@ -886,10 +888,11 @@ export default function Reportes() {
           }
         } catch { usuarioAsignado = '' }
         const hasAdj = (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) ? 'Sí' : '';
-  // Order must match DataGrid columns: Departamento, Categoría, Estado, Vencimiento, Usuario, Usuario Asignado, Fecha, Horas cierre (h), Adjunto, Asignados, Última Reasignación
+  // Order must match DataGrid columns: Departamento, Categoría, Subcategoría, Estado, Vencimiento, Usuario, Usuario Asignado, Fecha, Horas cierre (h), Adjunto, Asignados, Última Reasignación
         const row = [
           resolveDepartmentName(t.departamento),
           t.tipo || '',
+          t.subcategoria || '',
           t.estado || '',
           slaText,
           t.usuario || '',
@@ -912,7 +915,7 @@ export default function Reportes() {
         throw new Error('AutoTable plugin no disponible');
       }
 
-    const pdfHeaders = ['Departamento', 'Categoría', 'Estado', 'SLA Restante', 'Usuario'];
+    const pdfHeaders = ['Departamento', 'Categoría', 'Subcategoría', 'Estado', 'SLA Restante', 'Usuario'];
     if (showEventFields) {
       pdfHeaders.push('Id de evento', 'Nombre del evento');
     }
@@ -1091,6 +1094,7 @@ export default function Reportes() {
                     <TableRow>
                       <TableCell><strong>Departamento</strong></TableCell>
                       <TableCell><strong>Categoría</strong></TableCell>
+                      <TableCell><strong>Subcategoría</strong></TableCell>
                       <TableCell><strong>Estado</strong></TableCell>
                       <TableCell><strong>Usuario</strong></TableCell>
                       {showEventFields && <TableCell><strong>Id de evento</strong></TableCell>}
@@ -1106,6 +1110,17 @@ export default function Reportes() {
                       <TableRow key={row.id} hover>
                         <TableCell>{resolveDepartmentName(row.departamento)}</TableCell>
                         <TableCell>{row.tipo || ''}</TableCell>
+                        <TableCell sx={{ maxWidth: 150 }}>
+                          <Tooltip title={row.subcategoria || ''} arrow>
+                            <Box sx={{ 
+                              whiteSpace: 'nowrap', 
+                              overflow: 'hidden', 
+                              textOverflow: 'ellipsis' 
+                            }}>
+                              {row.subcategoria || ''}
+                            </Box>
+                          </Tooltip>
+                        </TableCell>
                         <TableCell>{row.estado || ''}</TableCell>
                         <TableCell>{row.usuario || ''}</TableCell>
                         {showEventFields && <TableCell>{row.eventId || ''}</TableCell>}
