@@ -30,7 +30,8 @@ import { BarChart, PieChart, LineChart } from "@mui/x-charts";
 import { ref, get } from "firebase/database";
 import { useDb } from '../context/DbContext';
 import { useAuth } from '../context/useAuth';
-import { canViewAllTickets, isAdminRole } from '../utils/roles';
+import { canViewAllTickets } from '../utils/roles';
+import { getDbForRecinto } from '../firebase/multiDb';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENTES AUXILIARES REUTILIZABLES
@@ -325,40 +326,39 @@ export default function Dashboard() {
       try {
         const dbFinal = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
         
-        // Departamentos: usar contexto si está disponible
+        // 1. Cargar Departamentos
+        let currentDeps = [];
         if (depsFromCtx && depsFromCtx.length) {
+          currentDeps = depsFromCtx;
           setDepartamentos(depsFromCtx);
         } else {
           const depSnap = await get(ref(dbFinal, "departamentos"));
           if (depSnap.exists()) {
-            setDepartamentos(Object.entries(depSnap.val()).map(([id, nombre]) => ({ id, nombre })));
+            currentDeps = Object.entries(depSnap.val()).map(([id, nombre]) => ({ id, nombre }));
+            setDepartamentos(currentDeps);
           }
         }
 
-        // Tickets: Optimizar carga para no admins
-        const isAdmin = isAdminRole(userData);
+        // 2. Cargar Tickets (Cargamos todos los del recinto y filtramos en el cliente para máxima fiabilidad)
         const canSeeAll = canViewAllTickets(userData);
-
-        if (canSeeAll) {
+        console.log("Dashboard Debug: canSeeAll =", canSeeAll, "userData =", userData);
+        
+        try {
           const ticketsSnap = await get(ref(dbFinal, "tickets"));
           if (ticketsSnap.exists()) {
-            setTickets(Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t })));
+            const data = Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t }));
+            console.log("Dashboard Debug: Tickets cargados del recinto =", data.length);
+            setTickets(data);
+          } else {
+            console.log("Dashboard Debug: No hay tickets en el nodo /tickets.");
+            setTickets([]);
           }
-        } else {
-          // Si no es admin, solo traer tickets de su departamento
-          // Nota: Requiere que departamento esté correctamente seteado en userData
-          const userDept = (userData?.departamento || '').trim();
-          if (userDept) {
-            // Intentar buscar por nombre o por ID
-            const ticketsQuery = query(ref(dbFinal, "tickets"), orderByChild('departamento'), equalTo(userDept));
-            const ticketsSnap = await get(ticketsQuery);
-            if (ticketsSnap.exists()) {
-              setTickets(Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t })));
-            }
-          }
+        } catch (ticketError) {
+          console.error("Dashboard Debug: Error al obtener tickets del recinto:", ticketError);
+          setTickets([]);
         }
       } catch (e) {
-        console.error("Dashboard error:", e);
+        console.error("Dashboard error general:", e);
         setError("Error al cargar los datos. Intenta de nuevo más tarde.");
       } finally {
         setLoading(false);
@@ -371,25 +371,44 @@ export default function Dashboard() {
   // LÓGICA DE PERMISOS Y FILTRADO
   // ═══════════════════════════════════════════════════════════════════════════
   
-  const isAdmin = isAdminRole(userData);
   const canSeeAll = canViewAllTickets(userData);
-  const userDeptName = userData?.departamento && String(userData.departamento).trim();
-  const userDeptIdFromName = userDeptName ? departamentos.find(d => d.nombre === userDeptName)?.id : undefined;
-  const userDeptCandidates = new Set([userDeptName, userDeptIdFromName].filter(Boolean));
-  const userDeptId = userDeptIdFromName || userDeptName;
 
-  const matchesUserDepartment = (ticketDept) => {
-    if (!userDeptCandidates.size || !ticketDept) return false;
-    if (userDeptCandidates.has(ticketDept)) return true;
-    if (typeof ticketDept === 'string' && ticketDept.includes('/')) {
-      const last = ticketDept.split('/').filter(Boolean).pop();
-      if (last && userDeptCandidates.has(last)) return true;
+  // Dashboard Memoized Data
+  const effectiveTickets = useMemo(() => {
+    // Si somos Admin o Gerencia, vemos todo lo que se haya cargado
+    if (canSeeAll) return tickets;
+    
+    const userDept = (userData?.departamento || '').trim();
+    if (!userDept) {
+      console.log("Dashboard Info: Usuario sin departamento, no hay tickets que mostrar.");
+      return [];
     }
-    return false;
-  };
 
-  const viewTickets = canSeeAll ? tickets : tickets.filter(t => matchesUserDepartment(t.departamento));
-  const effectiveTickets = useMemo(() => ((!isAdmin && !userDeptId) ? [] : viewTickets), [isAdmin, userDeptId, viewTickets]);
+    // Candidatos para match (Nombre e ID)
+    const depIdFromName = departamentos.find(d => 
+      String(d.nombre || '').trim().toLowerCase() === userDept.toLowerCase()
+    )?.id;
+    
+    const candidates = new Set([
+      userDept.toLowerCase(), 
+      depIdFromName?.toLowerCase()
+    ].filter(Boolean));
+
+    const filtered = tickets.filter(t => {
+      const tDept = String(t.departamento || '').trim().toLowerCase();
+      if (!tDept) return false;
+      if (candidates.has(tDept)) return true;
+      // Soporte para rutas de departamento estilo "Padre/Hijo"
+      if (tDept.includes('/')) {
+        const last = tDept.split('/').filter(Boolean).pop();
+        return last && candidates.has(last);
+      }
+      return false;
+    });
+
+    console.log(`Dashboard Memo: Filtrados ${filtered.length} de ${tickets.length} para depto ${userDept}`);
+    return filtered;
+  }, [canSeeAll, tickets, userData?.departamento, departamentos]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // HELPERS DE TIEMPO

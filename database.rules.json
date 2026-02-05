@@ -5,7 +5,7 @@
     ".write": "auth != null",
 
     "tickets": {
-      ".indexOn": ["asignadoA", "asignadoEmail", "usuarioEmail", "departamento"],
+      ".indexOn": ["asignadoA", "asignadoEmail", "usuarioEmail", "departamento", "estado", "tipoSolicitud"],
       ".read": true,
       ".write": "auth != null"
     },
