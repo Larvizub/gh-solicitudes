@@ -43,7 +43,7 @@ import UpdateIcon from "@mui/icons-material/Update";
 import SaveIcon from "@mui/icons-material/Save";
 import ConfirmationNumberIcon from "@mui/icons-material/ConfirmationNumber";
 import AssignmentIcon from "@mui/icons-material/Assignment";
-import { ref, get, set, update, remove, push, query, orderByChild } from "firebase/database";
+import { ref, get, set, update, remove, push, query, orderByChild, equalTo } from "firebase/database";
 import { storage } from "../firebase/firebaseConfig";
 import { getDbForRecinto } from '../firebase/multiDb';
 import { useDb } from '../context/DbContext';
@@ -57,7 +57,7 @@ import { gradients } from '../components/ui/sharedStyles.constants';
 export default function Tickets() {
   const { user, userData } = useAuth();
   const notify = useNotification();
-  const { db: ctxDb, recinto, loading: dbLoading, tiposTickets: tiposFromCtx, subcategoriasTickets: subcatsFromCtx } = useDb();
+  const { db: ctxDb, recinto, loading: dbLoading, tiposTickets: tiposFromCtx, subcategoriasTickets: subcatsFromCtx, departamentos: depsFromCtx, usuarios: usersFromCtx } = useDb();
   const [departamentos, setDepartamentos] = useState([]);
   const [tipos, setTipos] = useState({});
   const [subcats, setSubcats] = useState({});
@@ -268,29 +268,37 @@ export default function Tickets() {
       setTicketsLoading(true);
       const dbInstance = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
 
-      // Departamentos
-      const depSnap = await get(ref(dbInstance, "departamentos"));
-      let localDepartamentos = [];
-      if (depSnap.exists()) {
-        const deps = Object.entries(depSnap.val()).map(([id, nombre]) => ({ id, nombre }));
-        deps.sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
-        setDepartamentos(deps);
-        localDepartamentos = deps;
+      // Departamentos (usar contexto si está disponible)
+      let currentDeps = [];
+      if (depsFromCtx && depsFromCtx.length) {
+        currentDeps = depsFromCtx;
+        setDepartamentos(depsFromCtx);
       } else {
-        setDepartamentos([]);
-        localDepartamentos = [];
+        const depSnap = await get(ref(dbInstance, "departamentos"));
+        if (depSnap.exists()) {
+          currentDeps = Object.entries(depSnap.val()).map(([id, nombre]) => ({ id, nombre }));
+          currentDeps.sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
+          setDepartamentos(currentDeps);
+        }
       }
 
       // Tipos y subcategorias: preferir datos del contexto si estan disponibles (onValue global)
-      if (tiposFromCtx && Object.keys(tiposFromCtx).length) setTipos(tiposFromCtx);
-      else {
-        const tiposSnap = await get(ref(dbInstance, "tiposTickets"));
-        setTipos(tiposSnap.exists() ? tiposSnap.val() : {});
-      }
-      if (subcatsFromCtx && Object.keys(subcatsFromCtx).length) setSubcats(subcatsFromCtx);
-      else {
-        const subSnap = await get(ref(dbInstance, 'subcategoriasTickets'));
-        setSubcats(subSnap.exists() ? subSnap.val() : {});
+      setTipos(tiposFromCtx && Object.keys(tiposFromCtx).length ? tiposFromCtx : {});
+      setSubcats(subcatsFromCtx && Object.keys(subcatsFromCtx).length ? subcatsFromCtx : {});
+
+      // Usuarios (usar contexto si está disponible)
+      let allUsers = [];
+      if (usersFromCtx && usersFromCtx.length) {
+        allUsers = usersFromCtx;
+        setUsuarios(usersFromCtx);
+      } else {
+        try {
+          const usersSnap = await get(ref(dbInstance, 'usuarios'));
+          if (usersSnap.exists()) {
+            allUsers = Object.entries(usersSnap.val()).map(([id, u]) => ({ id, ...u }));
+            setUsuarios(allUsers);
+          }
+        } catch {}
       }
 
       // SLA configurations
@@ -303,28 +311,11 @@ export default function Tickets() {
         setSlaSubcats(slaSubcatsSnap.exists() ? slaSubcatsSnap.val() : {});
       } catch (e) {
         console.warn('No se pudo cargar configuración SLA', e);
-        setSlaConfigs({});
-        setSlaSubcats({});
       }
 
-      // Usuarios
-      let allUsers = [];
-      try {
-        const usersSnap = await get(ref(dbInstance, 'usuarios'));
-        if (usersSnap.exists()) {
-          allUsers = Object.entries(usersSnap.val()).map(([id, u]) => ({ id, ...u }));
-          setUsuarios(allUsers);
-        } else {
-          setUsuarios([]);
-        }
-      } catch (e) {
-        console.warn('No se pudo cargar usuarios', e);
-        setUsuarios([]);
-      }
-
-      // Preparar candidatos de departamento del usuario (puede ser nombre en userData)
+      // Preparar candidatos de departamento del usuario
       const userDeptRaw = (userData?.departamento || '').trim();
-      const matchedDep = userDeptRaw ? localDepartamentos?.find(d => String(d.nombre).toLowerCase() === String(userDeptRaw).toLowerCase() || String(d.id) === String(userDeptRaw)) : null;
+      const matchedDep = userDeptRaw ? currentDeps?.find(d => String(d.nombre).toLowerCase() === String(userDeptRaw).toLowerCase() || String(d.id) === String(userDeptRaw)) : null;
       const userDeptCandidates = new Set([userDeptRaw, matchedDep?.id, matchedDep?.nombre].filter(Boolean));
       const matchesUserDept = (ticketDept) => {
         if (!userDeptCandidates.size) return false;
@@ -335,7 +326,7 @@ export default function Tickets() {
             const last = ticketDept.split('/').filter(Boolean).pop();
             if (last && userDeptCandidates.has(last)) return true;
           }
-          const depByName = localDepartamentos.find(d => d.nombre === ticketDept);
+          const depByName = currentDeps.find(d => d.nombre === ticketDept);
           if (depByName && (userDeptCandidates.has(depByName.id) || userDeptCandidates.has(depByName.nombre))) return true;
         }
         if (typeof ticketDept === 'object') {
@@ -344,7 +335,7 @@ export default function Tickets() {
           const candName = ticketDept.nombre || ticketDept.name || ticketDept.label;
           if (candName && userDeptCandidates.has(candName)) return true;
           if (candName) {
-            const depByName = localDepartamentos.find(d => d.nombre === candName);
+            const depByName = currentDeps.find(d => d.nombre === candName);
             if (depByName && userDeptCandidates.has(depByName.id)) return true;
           }
         }
@@ -361,7 +352,7 @@ export default function Tickets() {
         const creatorDeptRaw = (creator.departamento || '').trim();
         if (userDeptCandidates.has(creatorDeptRaw)) return true;
         // También verificar por ID de departamento
-        const creatorDept = localDepartamentos.find(d => d.nombre === creatorDeptRaw);
+        const creatorDept = currentDeps.find(d => d.nombre === creatorDeptRaw);
         return creatorDept && userDeptCandidates.has(creatorDept.id);
       };
 
@@ -389,30 +380,40 @@ export default function Tickets() {
           // Ejecutar consultas específicas para minimizar lectura completa
           const uid = user?.uid || '';
           const email = (user?.email || '').toLowerCase();
-          const assignedQuery = query(ref(dbInstance, 'tickets'), orderByChild('asignadoA'));
-          const createdQuery = query(ref(dbInstance, 'tickets'), orderByChild('usuarioEmail'));
+          
+          // Dividimos en consultas más específicas con equalTo para mejor rendimiento
+          const assignedByUidQuery = query(ref(dbInstance, 'tickets'), orderByChild('asignadoA'), equalTo(uid));
+          const assignedByEmailQuery = query(ref(dbInstance, 'tickets'), orderByChild('asignadoEmail'), equalTo(email));
+          const createdQuery = query(ref(dbInstance, 'tickets'), orderByChild('usuarioEmail'), equalTo(email));
+          
+          // La consulta por departamento es más difícil de optimizar con equalTo debido a los múltiples formatos (ID vs Nombre),
+          // pero si tenemos un ID claro, lo usamos.
           const deptQuery = query(ref(dbInstance, 'tickets'), orderByChild('departamento'));
 
-          // Nota: Realtime Database no permite múltiples equalTo en una sola llamada; hacemos gets separados y filtramos localmente
-          const [assignedSnap, createdSnap, deptSnapTickets] = await Promise.all([
-            get(assignedQuery),
+          const [assignedUidSnap, assignedEmailSnap, createdSnap, deptSnapTickets] = await Promise.all([
+            get(assignedByUidQuery),
+            get(assignedByEmailQuery),
             get(createdQuery),
             get(deptQuery),
           ]);
 
-          // Asignados a mí (filtrar por campo asignadoA o asignadoEmail)
-          let assigned = [];
-          if (assignedSnap.exists()) {
-            assigned = Object.entries(assignedSnap.val()).map(([id, t]) => ({ id, ...t })).filter(t => (t.asignadoA === uid) || ((t.asignadoEmail || '').toLowerCase() === email));
+          // Asignados a mí (Combinar resultados de UID y Email)
+          const assignedMap = {};
+          if (assignedUidSnap.exists()) {
+            Object.entries(assignedUidSnap.val()).forEach(([id, t]) => { assignedMap[id] = { id, ...t }; });
           }
+          if (assignedEmailSnap.exists()) {
+            Object.entries(assignedEmailSnap.val()).forEach(([id, t]) => { assignedMap[id] = { id, ...t }; });
+          }
+          const assigned = Object.values(assignedMap);
 
           // Creados por mí
           let created = [];
           if (createdSnap.exists()) {
-            created = Object.entries(createdSnap.val()).map(([id, t]) => ({ id, ...t })).filter(t => (t.usuarioEmail || '').toLowerCase() === email);
+            created = Object.entries(createdSnap.val()).map(([id, t]) => ({ id, ...t }));
           }
 
-          // Por departamento
+          // Por departamento (Aún requiere filtrado local debido a la complejidad de matchesUserDept)
           let depts = [];
           if (deptSnapTickets.exists()) {
             depts = Object.entries(deptSnapTickets.val()).map(([id, t]) => ({ id, ...t })).filter(t => matchesUserDept(t.departamento));

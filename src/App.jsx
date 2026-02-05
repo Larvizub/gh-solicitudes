@@ -8,8 +8,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './modules/auth/Login';
 import Register from './modules/auth/Register';
 import LayoutHeroica from './components/LayoutHeroica';
-import Dashboard from './modules/Dashboard';
 
+const Dashboard = React.lazy(() => import('./modules/Dashboard'));
 const Tickets = React.lazy(() => import('./modules/Tickets'));
 const TicketPage = React.lazy(() => import('./modules/TicketPage'));
 const Reportes = React.lazy(() => import('./modules/Reportes'));

@@ -312,39 +312,60 @@ export default function Dashboard() {
   const [departamentos, setDepartamentos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { db: ctxDb, recinto } = useDb();
+  const { db: ctxDb, recinto, departamentos: depsFromCtx, loading: dbLoading } = useDb();
   const { userData } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {
+      // Esperar a que el contexto inicialice la DB
+      if (dbLoading && !ctxDb) return;
+      
       setLoading(true);
       setError("");
       try {
-        const db = ctxDb;
-        if (!db) await new Promise(res => setTimeout(res, 250));
-        const dbFinal = db || ctxDb;
-        if (!dbFinal) throw new Error('DB no inicializada');
+        const dbFinal = ctxDb || await getDbForRecinto(recinto || localStorage.getItem('selectedRecinto') || 'GRUPO_HEROICA');
         
-        // Cargar datos en paralelo
-        const [depSnap, ticketsSnap] = await Promise.all([
-          get(ref(dbFinal, "departamentos")),
-          get(ref(dbFinal, "tickets")),
-        ]);
-        
-        if (depSnap.exists()) {
-          setDepartamentos(Object.entries(depSnap.val()).map(([id, nombre]) => ({ id, nombre })));
+        // Departamentos: usar contexto si está disponible
+        if (depsFromCtx && depsFromCtx.length) {
+          setDepartamentos(depsFromCtx);
+        } else {
+          const depSnap = await get(ref(dbFinal, "departamentos"));
+          if (depSnap.exists()) {
+            setDepartamentos(Object.entries(depSnap.val()).map(([id, nombre]) => ({ id, nombre })));
+          }
         }
-        if (ticketsSnap.exists()) {
-          setTickets(Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t })));
+
+        // Tickets: Optimizar carga para no admins
+        const isAdmin = isAdminRole(userData);
+        const canSeeAll = canViewAllTickets(userData);
+
+        if (canSeeAll) {
+          const ticketsSnap = await get(ref(dbFinal, "tickets"));
+          if (ticketsSnap.exists()) {
+            setTickets(Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t })));
+          }
+        } else {
+          // Si no es admin, solo traer tickets de su departamento
+          // Nota: Requiere que departamento esté correctamente seteado en userData
+          const userDept = (userData?.departamento || '').trim();
+          if (userDept) {
+            // Intentar buscar por nombre o por ID
+            const ticketsQuery = query(ref(dbFinal, "tickets"), orderByChild('departamento'), equalTo(userDept));
+            const ticketsSnap = await get(ticketsQuery);
+            if (ticketsSnap.exists()) {
+              setTickets(Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t })));
+            }
+          }
         }
-      } catch {
+      } catch (e) {
+        console.error("Dashboard error:", e);
         setError("Error al cargar los datos. Intenta de nuevo más tarde.");
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, [ctxDb, recinto]);
+  }, [ctxDb, recinto, dbLoading, userData, depsFromCtx]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // LÓGICA DE PERMISOS Y FILTRADO

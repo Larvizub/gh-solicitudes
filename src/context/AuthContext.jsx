@@ -580,8 +580,16 @@ export function AuthProvider({ children }) {
     };
   }, [user]);
 
+  const value = React.useMemo(() => ({
+    user,
+    userData,
+    loading,
+    logout,
+    dbAccessError
+  }), [user, userData, loading, dbAccessError]);
+
   return (
-    <AuthContext.Provider value={{ user, userData, loading, logout, dbAccessError }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

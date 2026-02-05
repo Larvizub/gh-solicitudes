@@ -9,7 +9,9 @@ const DbContext = createContext({
   loading: true,
   RECINTO_DB_MAP: {},
   tiposTickets: {},
-  subcategoriasTickets: {}
+  subcategoriasTickets: {},
+  departamentos: [],
+  usuarios: []
 });
 
 export function useDb() {
@@ -28,6 +30,8 @@ export function DbProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [tiposTickets, setTiposTickets] = useState({});
   const [subcategoriasTickets, setSubcategoriasTickets] = useState({});
+  const [departamentos, setDepartamentos] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,27 +57,57 @@ export function DbProvider({ children }) {
     if (!db) {
       setTiposTickets({});
       setSubcategoriasTickets({});
+      setDepartamentos([]);
+      setUsuarios([]);
       return () => {};
     }
     const tiposRef = dbRef(db, 'tiposTickets');
     const subsRef = dbRef(db, 'subcategoriasTickets');
+    const depsRef = dbRef(db, 'departamentos');
+    const usersRef = dbRef(db, 'usuarios');
+
     const tiposCb = (snap) => {
       try { setTiposTickets(snap.exists() ? snap.val() : {}); } catch (e) { console.warn('Error parsing tiposTickets', e); setTiposTickets({}); }
     };
     const subsCb = (snap) => {
       try { setSubcategoriasTickets(snap.exists() ? snap.val() : {}); } catch (e) { console.warn('Error parsing subcategoriasTickets', e); setSubcategoriasTickets({}); }
     };
+    const depsCb = (snap) => {
+      try {
+        if (snap.exists()) {
+          const deps = Object.entries(snap.val()).map(([id, nombre]) => ({ id, nombre }));
+          deps.sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' }));
+          setDepartamentos(deps);
+        } else {
+          setDepartamentos([]);
+        }
+      } catch (e) { console.warn('Error parsing departamentos', e); setDepartamentos([]); }
+    };
+    const usersCb = (snap) => {
+      try {
+        if (snap.exists()) {
+          const users = Object.entries(snap.val()).map(([id, u]) => ({ id, ...u }));
+          setUsuarios(users);
+        } else {
+          setUsuarios([]);
+        }
+      } catch (e) { console.warn('Error parsing usuarios', e); setUsuarios([]); }
+    };
+
     onValue(tiposRef, tiposCb);
     onValue(subsRef, subsCb);
+    onValue(depsRef, depsCb);
+    onValue(usersRef, usersCb);
+
     return () => {
-      try {
-        off(tiposRef, 'value', tiposCb);
-      } catch (e) { console.warn('Error unsubscribing tiposTickets listener', e); }
-      try {
-        off(subsRef, 'value', subsCb);
-      } catch (e) { console.warn('Error unsubscribing subcategoriasTickets listener', e); }
+      try { off(tiposRef, 'value', tiposCb); } catch (e) { console.debug('error off tipos', e); }
+      try { off(subsRef, 'value', subsCb); } catch (e) { console.debug('error off subs', e); }
+      try { off(depsRef, 'value', depsCb); } catch (e) { console.debug('error off deps', e); }
+      try { off(usersRef, 'value', usersCb); } catch (e) { console.debug('error off users', e); }
       setTiposTickets({});
       setSubcategoriasTickets({});
+      setDepartamentos([]);
+      setUsuarios([]);
     };
   }, [db]);
 
@@ -81,6 +115,17 @@ export function DbProvider({ children }) {
   try { localStorage.setItem('selectedRecinto', recinto); } catch (e) { console.warn('No se pudo persistir recinto', e); }
   }, [recinto]);
 
-  const value = { db, recinto, setRecinto, loading, RECINTO_DB_MAP, tiposTickets, subcategoriasTickets };
+  const value = React.useMemo(() => ({
+    db,
+    recinto,
+    setRecinto,
+    loading,
+    RECINTO_DB_MAP,
+    tiposTickets,
+    subcategoriasTickets,
+    departamentos,
+    usuarios
+  }), [db, recinto, loading, tiposTickets, subcategoriasTickets, departamentos, usuarios]);
+
   return <DbContext.Provider value={value}>{children}</DbContext.Provider>;
 }
