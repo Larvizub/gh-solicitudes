@@ -973,7 +973,7 @@ export default function Tickets() {
                           boxShadow: theme.shadows[8],
                         } 
                       }}
-                      onClick={() => navigate(`/ticket/${ticket.id}`)}
+                      onClick={() => handleOpenDialog(ticket)}
                     >
                       <Box
                         sx={{
