@@ -907,6 +907,10 @@ export default function TicketPage() {
 
   const handleSave = async () => {
     if (saving) return; // prevenir doble click
+    if (isNew && (!form.departamento || !form.tipo || !form.subcategoria || !Array.isArray(form.asignados) || form.asignados.length === 0)) {
+      try { notify('Solicitud para, Categoría, Subcategoría y Asignar solicitud a son obligatorios', 'error', { mode: 'toast', persist: true }); } catch { setError('Solicitud para, Categoría, Subcategoría y Asignar solicitud a son obligatorios'); }
+      return;
+    }
     if (!form.departamento || !form.tipo || !form.subcategoria || !form.descripcion.trim()) {
       try { notify('Todos los campos son obligatorios', 'error', { mode: 'toast', persist: true }); } catch { setError('Todos los campos son obligatorios'); }
       return;
@@ -1465,6 +1469,7 @@ export default function TicketPage() {
               <TextField
                 select
                 label="Solicitud para"
+                required={isNew}
                 value={form.departamento}
                 onChange={e => setForm(f => ({ ...f, departamento: e.target.value, tipo: '' }))}
                 disabled={saving || (!isNew && !isAdmin)}
@@ -1490,6 +1495,7 @@ export default function TicketPage() {
               <TextField
                 select
                 label="Categoría"
+                required={isNew}
                 value={form.tipo}
                 onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
                 disabled={saving || (!isNew && !isAdmin)}
@@ -1521,6 +1527,7 @@ export default function TicketPage() {
               <TextField
                 select
                 label="Subcategoría"
+                required={isNew}
                 value={form.subcategoria}
                 onChange={e => setForm({...form, subcategoria: e.target.value})}
                 disabled={saving || (!isNew && !isAdmin && !reassignMode)}
@@ -1562,6 +1569,7 @@ export default function TicketPage() {
                   <TextField
                     {...params}
                     label="Asignar solicitud a: (múltiple)"
+                    required={isNew}
                     fullWidth
                     sx={{
                       '& .MuiOutlinedInput-root': {

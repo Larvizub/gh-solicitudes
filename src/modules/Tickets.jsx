@@ -504,6 +504,10 @@ export default function Tickets() {
 
   // Guardar ticket
   const handleSaveTicket = async () => {
+    if (!editTicket && (!form.departamento || !form.tipo || !form.subcategoria || !Array.isArray(form.asignados) || form.asignados.length === 0)) {
+      try { notify('Solicitud para, Categoría, Subcategoría y Asignar solicitud a son obligatorios', 'error', { mode: 'toast', persist: true }); } catch { setError('Solicitud para, Categoría, Subcategoría y Asignar solicitud a son obligatorios'); }
+      return;
+    }
     if (!form.departamento || !form.tipo || !form.subcategoria || !form.descripcion.trim()) {
       try { notify('Todos los campos son obligatorios', 'error', { mode: 'toast', persist: true }); } catch { setError('Todos los campos son obligatorios'); }
       return;
@@ -1269,6 +1273,7 @@ export default function Tickets() {
             <TextField
               select
               label="Departamento"
+              required={!editTicket}
               fullWidth
               margin="normal"
               value={form.departamento}
@@ -1284,6 +1289,7 @@ export default function Tickets() {
             <TextField
               select
               label="Tipo de Ticket"
+              required={!editTicket}
               fullWidth
               margin="normal"
               value={form.tipo}
@@ -1300,6 +1306,7 @@ export default function Tickets() {
             <TextField
               select
               label="Subcategoría"
+              required={!editTicket}
               fullWidth
               margin="normal"
               value={form.subcategoria}
@@ -1333,7 +1340,7 @@ export default function Tickets() {
               }}
               disabled={!form.departamento || (!!editTicket && !isAdmin)}
               renderInput={(params) => (
-                <TextField {...params} label="Asignar a (múltiple)" margin="normal" sx={{ bgcolor: 'background.paper', borderRadius: 2 }} />
+                <TextField {...params} label="Asignar a (múltiple)" required={!editTicket} margin="normal" sx={{ bgcolor: 'background.paper', borderRadius: 2 }} />
               )}
             />
             <TextField
