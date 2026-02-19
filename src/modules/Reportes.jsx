@@ -239,6 +239,23 @@ export default function Reportes() {
 
   // Promedio de cierre por usuario asignado (responsable). Si hay múltiples asignados se acredita a cada uno.
   const userDurations = {};
+  const getDisplayUserName = (user, fallback = '') => {
+    if (!user || typeof user !== 'object') return fallback;
+    const full = `${user.nombre || ''} ${user.apellido || ''}`.trim();
+    return full || user.displayName || user.name || user.email || fallback;
+  };
+  const usuariosLookup = useMemo(() => {
+    const byId = {};
+    const byEmail = {};
+    if (usuariosMap && typeof usuariosMap === 'object') {
+      for (const [id, user] of Object.entries(usuariosMap)) {
+        byId[id] = user;
+        const email = String(user?.email || '').trim().toLowerCase();
+        if (email) byEmail[email] = user;
+      }
+    }
+    return { byId, byEmail };
+  }, [usuariosMap]);
   const resolveUserLabel = (u) => {
     if (!u) return '';
     if (typeof u === 'object') return u.displayName || u.nombre || u.name || u.email || u.id || '';
@@ -527,38 +544,31 @@ export default function Reportes() {
     if (typeof entry === 'object') {
       // Si trae id y podemos ampliar desde usuariosMap, usamos el registro completo
       const maybeId = entry.id || entry.uid || entry.key;
-      if (maybeId && usuariosMap[maybeId]) {
-        const u = usuariosMap[maybeId];
-        const full = `${u.nombre || ''} ${u.apellido || ''}`.trim();
-        return full || u.displayName || u.name || u.email || maybeId;
+      if (maybeId && usuariosLookup.byId[maybeId]) {
+        return getDisplayUserName(usuariosLookup.byId[maybeId], maybeId);
       }
-      const full = `${entry.nombre || ''} ${entry.apellido || ''}`.trim();
-      return full || entry.displayName || entry.name || entry.email || entry.id || '';
+      return getDisplayUserName(entry, entry.id || '');
     }
     // Si es string: puede ser id, email o ya un nombre
     if (typeof entry === 'string') {
       const val = entry.trim();
       // Primero intentar id directo
-      if (usuariosMap[val]) {
-        const u = usuariosMap[val];
-        const full = `${u.nombre || ''} ${u.apellido || ''}`.trim();
-        return full || u.displayName || u.name || u.email || val;
+      if (usuariosLookup.byId[val]) {
+        return getDisplayUserName(usuariosLookup.byId[val], val);
       }
       // Si parece email, buscar por email
       if (val.includes('@')) {
         const lower = val.toLowerCase();
-        for (const [id, u] of Object.entries(usuariosMap)) {
-          if ((u.email || '').toLowerCase() === lower) {
-            const full = `${u.nombre || ''} ${u.apellido || ''}`.trim();
-            return full || u.displayName || u.name || u.email || id;
-          }
+        const user = usuariosLookup.byEmail[lower];
+        if (user) {
+          return getDisplayUserName(user, val);
         }
       }
       // Como fallback, devolver tal cual (podría ser un nombre ya)
       return val;
     }
     return '';
-  }, [usuariosMap]);
+  }, [usuariosLookup]);
 
   // Debug: mostrar el primer ticket y los valores resueltos en consola para diagnóstico UI
   useEffect(() => {
@@ -627,7 +637,21 @@ export default function Reportes() {
   // Exportar a Excel
   const handleExportExcel = () => {
     try {
-  const data = ticketsFiltrados.map(t => {
+      // Build an array-of-arrays (AOA) to guarantee column order matches the DataGrid table
+      // Base headers
+      const headers = ['Departamento', 'Categoría', 'Subcategoría', 'Descripción', 'Estado', 'SLA Restante', 'Usuario'];
+      // Event fields if applicable (after Usuario)
+      if (showEventFields) {
+        headers.push('Id de evento', 'Nombre del evento');
+      }
+      // Remaining headers
+      headers.push('Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Reasignados', 'Última Reasignación');
+      
+      // Build rows explicitly to guarantee column order matches the DataGrid table
+      const rows = new Array(enrichedTickets.length + 1);
+      rows[0] = headers;
+      for (let i = 0; i < enrichedTickets.length; i++) {
+        const t = enrichedTickets[i];
         const slaInfo = calculateSlaForTicket(t);
         let slaText = '-';
         if (slaInfo) {
@@ -641,113 +665,40 @@ export default function Reportes() {
             slaText = `${totalHours}h`;
           }
         }
-  // Tiempo hasta cierre en horas (decimal 1d) — consistente con la vista de la tabla
-  const ms = computeTicketResolutionMs(t);
-  const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
-  let tiempoLaboral = hours !== null ? `${hours}h` : '';
-  // Determinar SLA de la subcategoría (si está disponible en el ticket)
-  const slaCandidate = t?.subcategoriaHoras ?? t?.subcategoriaTiempo ?? t?.slaHours ?? null;
-  if (hours !== null && slaCandidate !== null && slaCandidate !== undefined && !isNaN(Number(slaCandidate))) {
-    if (hours > Number(slaCandidate)) tiempoLaboral = `${tiempoLaboral} (Excedido)`;
-  }
-  // Asignados solo si hay historial de reasignaciones con al menos 1 entrada
-        let asignadosTexto = '';
-        let lastReassignAt = '';
-        if (t?.reassignments) {
-          try {
-            const arr = Object.values(t.reassignments).filter(Boolean);
-            if (arr.length) {
-              const maxAt = arr.reduce((m,o)=> (o?.at && o.at>m?o.at:m),0);
-              if (maxAt) lastReassignAt = new Date(maxAt).toLocaleString();
-              if (Array.isArray(t.asignados)) {
-                const list = t.asignados.map(a => resolveAssignedEntry(a)).filter(Boolean);
-                const seen = new Set();
-                const dedup = [];
-                for (const v of list) { if (!seen.has(v)) { seen.add(v); dedup.push(v); } }
-                asignadosTexto = dedup.join(', ');
-              }
-            }
-          } catch { /* noop */ }
+        const ms = computeTicketResolutionMs(t);
+        const hours = (ms !== null && ms !== undefined) ? Math.round((ms / (1000 * 60 * 60)) * 10) / 10 : null;
+        let tiempoLaboral = hours !== null ? `${hours}h` : '';
+        const slaCandidate = t?.subcategoriaHoras ?? t?.subcategoriaTiempo ?? t?.slaHours ?? null;
+        if (hours !== null && slaCandidate !== null && slaCandidate !== undefined && !isNaN(Number(slaCandidate)) && hours > Number(slaCandidate)) {
+          tiempoLaboral = `${tiempoLaboral} (Excedido)`;
         }
-        // calcular usuarioAsignado para export
-        let usuarioAsignado = '';
-        try {
-          if (t?.initialAssignees) {
-            if (Array.isArray(t.initialAssignees) && t.initialAssignees.length) usuarioAsignado = resolveAssignedEntry(t.initialAssignees[0]);
-            else usuarioAsignado = resolveAssignedEntry(t.initialAssignees);
-          } else if (t?.asignadosIniciales) {
-            if (Array.isArray(t.asignadosIniciales) && t.asignadosIniciales.length) usuarioAsignado = resolveAssignedEntry(t.asignadosIniciales[0]);
-            else usuarioAsignado = resolveAssignedEntry(t.asignadosIniciales);
-          } else if (t?.asignadoOriginal) {
-            usuarioAsignado = resolveAssignedEntry(t.asignadoOriginal);
-          } else if (Array.isArray(t.asignados) && t.asignados.length) {
-            usuarioAsignado = resolveAssignedEntry(t.asignados[0]);
-          } else if (t.usuario) {
-            usuarioAsignado = resolveAssignedEntry(t.usuario);
-          }
-        } catch { usuarioAsignado = '' }
 
-        // Return object (not relied on for column order). We'll build sheet with explicit column order below.
-        const rowData = {
-          'Departamento': resolveDepartmentName(t.departamento),
-          'Categoría': t.tipo || '',
-          'Subcategoría': t.subcategoria || '',
-          'Descripción': t.descripcion || '',
-          'Estado': t.estado || '',
-          'SLA Restante': slaText,
-          'Usuario': t.usuario || '',
-          'Usuario Asignado': usuarioAsignado || (t.usuario || ''),
-          'Fecha': resolveDateFromRow(t),
-          'Horas cierre (h)': tiempoLaboral,
-          'Adjunto': (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
-          'Reasignados': asignadosTexto,
-          'Última Reasignación': lastReassignAt,
-        };
-        if (showEventFields) {
-          rowData['Id de evento'] = t.eventId || '';
-          rowData['Nombre del evento'] = t.eventName || '';
-        }
-        return rowData;
-      });
-      // Build an array-of-arrays (AOA) to guarantee column order matches the DataGrid table
-      // Base headers
-      const headers = ['Departamento', 'Categoría', 'Subcategoría', 'Descripción', 'Estado', 'SLA Restante', 'Usuario'];
-      // Event fields if applicable (after Usuario)
-      if (showEventFields) {
-        headers.push('Id de evento', 'Event Name');
-      }
-      // Remaining headers
-      headers.push('Usuario Asignado', 'Fecha', 'Horas cierre (h)', 'Adjunto', 'Reasignados', 'Última Reasignación');
-      
-      // Build rows explicitly to guarantee column order matches the DataGrid table
-      const rows = [headers];
-      data.forEach(d => {
         const row = [
-          d['Departamento'] || '',
-          d['Categoría'] || '',
-          d['Subcategoría'] || '',
-          d['Descripción'] || '',
-          d['Estado'] || '',
-          d['SLA Restante'] || '',
-          d['Usuario'] || '',
+          resolveDepartmentName(t.departamento),
+          t.tipo || '',
+          t.subcategoria || '',
+          t.descripcion || '',
+          t.estado || '',
+          slaText,
+          t.usuario || '',
         ];
         if (showEventFields) {
-          row.push(d['Id de evento'] || '', d['Nombre del evento'] || '');
+          row.push(t.eventId || '', t.eventName || '');
         }
         row.push(
-          d['Usuario Asignado'] || '',
-          d['Fecha'] || '',
-          d['Horas cierre (h)'] || '',
-          d['Adjunto'] || '',
-          d['Reasignados'] || '',
-          d['Última Reasignación'] || ''
+          t.usuarioAsignado || (t.usuario || ''),
+          resolveDateFromRow(t),
+          tiempoLaboral,
+          (t.adjuntoUrl || t.adjunto?.url || (Array.isArray(t.adjuntos) && t.adjuntos[0]?.url) || t.adjunto) || '',
+          t.asignadosTexto || '',
+          t.lastReassignAt || ''
         );
-        rows.push(row);
-      });
+        rows[i + 1] = row;
+      }
       const ws = XLSX.utils.aoa_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Tickets');
-      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array', compression: false });
       const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
       saveAs(blob, 'reporte_tickets.xlsx');
       setSnackbar({ open: true, message: 'Exportado a Excel', severity: 'success' });
