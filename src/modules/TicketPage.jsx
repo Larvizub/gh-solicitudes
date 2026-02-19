@@ -1653,6 +1653,7 @@ export default function TicketPage() {
           })()}
           <TextField
             label="Descripción"
+            required
             multiline
             minRows={3}
             value={form.descripcion}
