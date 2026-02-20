@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -32,6 +32,7 @@ import { useDb } from '../context/DbContext';
 import { useAuth } from '../context/useAuth';
 import { canViewAllTickets } from '../utils/roles';
 import { getDbForRecinto } from '../firebase/multiDb';
+import { calculateSlaRemaining } from '../utils/slaCalculator';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENTES AUXILIARES REUTILIZABLES
@@ -311,6 +312,10 @@ export default function Dashboard() {
   
   const [tickets, setTickets] = useState([]);
   const [departamentos, setDepartamentos] = useState([]);
+  const [slaConfigs, setSlaConfigs] = useState({});
+  const [slaSubcats, setSlaSubcats] = useState({});
+  const [tipos, setTipos] = useState({});
+  const [subcats, setSubcats] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const { db: ctxDb, recinto, departamentos: depsFromCtx, loading: dbLoading } = useDb();
@@ -339,12 +344,19 @@ export default function Dashboard() {
           }
         }
 
-        // 2. Cargar Tickets (Cargamos todos los del recinto y filtramos en el cliente para máxima fiabilidad)
+        // 2. Cargar Tickets + configuraciones SLA
         const canSeeAll = canViewAllTickets(userData);
         console.log("Dashboard Debug: canSeeAll =", canSeeAll, "userData =", userData);
         
         try {
-          const ticketsSnap = await get(ref(dbFinal, "tickets"));
+          const [ticketsSnap, tiposSnap, subcatsSnap, slaConfigSnap, slaSubcatsSnap] = await Promise.all([
+            get(ref(dbFinal, "tickets")),
+            get(ref(dbFinal, "tipos")),
+            get(ref(dbFinal, "subcategorias")),
+            get(ref(dbFinal, "sla/configs")),
+            get(ref(dbFinal, "sla/subcategorias")),
+          ]);
+
           if (ticketsSnap.exists()) {
             const data = Object.entries(ticketsSnap.val()).map(([id, t]) => ({ id, ...t }));
             console.log("Dashboard Debug: Tickets cargados del recinto =", data.length);
@@ -353,9 +365,18 @@ export default function Dashboard() {
             console.log("Dashboard Debug: No hay tickets en el nodo /tickets.");
             setTickets([]);
           }
+
+          setTipos(tiposSnap.exists() ? tiposSnap.val() : {});
+          setSubcats(subcatsSnap.exists() ? subcatsSnap.val() : {});
+          setSlaConfigs(slaConfigSnap.exists() ? slaConfigSnap.val() : {});
+          setSlaSubcats(slaSubcatsSnap.exists() ? slaSubcatsSnap.val() : {});
         } catch (ticketError) {
           console.error("Dashboard Debug: Error al obtener tickets del recinto:", ticketError);
           setTickets([]);
+          setTipos({});
+          setSubcats({});
+          setSlaConfigs({});
+          setSlaSubcats({});
         }
       } catch (e) {
         console.error("Dashboard error general:", e);
@@ -451,6 +472,30 @@ export default function Dashboard() {
     return null;
   };
 
+  const calculateSlaForDashboardTicket = useCallback((ticket) => {
+    if (!ticket) return null;
+
+    let deptId = ticket._departamentoId || ticket.departamento;
+    if (typeof deptId === 'string' && deptId.includes('/')) {
+      deptId = deptId.split('/').filter(Boolean).pop() || deptId;
+    }
+
+    if (typeof deptId === 'string') {
+      const depByName = departamentos.find(d =>
+        String(d.nombre || '').trim().toLowerCase() === deptId.trim().toLowerCase()
+      );
+      if (depByName?.id) deptId = depByName.id;
+    }
+
+    return calculateSlaRemaining(
+      deptId ? { ...ticket, _departamentoId: deptId } : ticket,
+      slaConfigs,
+      slaSubcats,
+      tipos,
+      subcats
+    );
+  }, [departamentos, slaConfigs, slaSubcats, tipos, subcats]);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // CÁLCULOS DE MÉTRICAS
   // ═══════════════════════════════════════════════════════════════════════════
@@ -501,49 +546,37 @@ export default function Dashboard() {
 
   // Tickets vencidos (SLA excedido)
   const ticketsVencidos = useMemo(() => {
-    const now = Date.now();
     return effectiveTickets.filter(t => {
       if (t.estado === 'Cerrado') return false;
       try {
-        const slaHours = t.slaHours || 24; // default 24h si no hay SLA configurado
-        const created = getTicketCreatedTs(t);
-        if (!created) return false;
-        const deadline = created + (slaHours * 60 * 60 * 1000);
-        return now > deadline;
+        const slaInfo = calculateSlaForDashboardTicket(t);
+        return Boolean(slaInfo?.isExpired);
       } catch {
         return false;
       }
     });
-  }, [effectiveTickets]);
+  }, [effectiveTickets, calculateSlaForDashboardTicket]);
 
   // Tickets próximos a vencer (menos de 4 horas)
   const ticketsProximosVencer = useMemo(() => {
-    const now = Date.now();
-    const fourHoursMs = 4 * 60 * 60 * 1000;
     return effectiveTickets
       .filter(t => {
         if (t.estado === 'Cerrado') return false;
         try {
-          const slaHours = t.slaHours || 24;
-          const created = getTicketCreatedTs(t);
-          if (!created) return false;
-          const deadline = created + (slaHours * 60 * 60 * 1000);
-          const remaining = deadline - now;
-          return remaining > 0 && remaining <= fourHoursMs;
+          const slaInfo = calculateSlaForDashboardTicket(t);
+          if (!slaInfo || slaInfo.isExpired) return false;
+          return slaInfo.remainingHours > 0 && slaInfo.remainingHours <= 4;
         } catch {
           return false;
         }
       })
       .map(t => {
-        const slaHours = t.slaHours || 24;
-        const created = getTicketCreatedTs(t);
-        const deadline = created + (slaHours * 60 * 60 * 1000);
-        const remainingHours = (deadline - Date.now()) / (1000 * 60 * 60);
-        return { ...t, slaRemaining: remainingHours };
+        const slaInfo = calculateSlaForDashboardTicket(t);
+        return { ...t, slaRemaining: slaInfo?.remainingHours ?? 0 };
       })
       .sort((a, b) => a.slaRemaining - b.slaRemaining)
       .slice(0, 5);
-  }, [effectiveTickets]);
+  }, [effectiveTickets, calculateSlaForDashboardTicket]);
 
   // Tasa de reapertura
   const tasaReapertura = useMemo(() => {

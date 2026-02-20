@@ -72,12 +72,14 @@ export const calculateSlaRemaining = (ticket, slaConfig = {}, slaSubcatsConfig =
     let elapsedMs = workingMsBetween(createdMs, now, bhOpts);
 
     // Descontar pausas: ticket.pauses es un objeto de objetos { start, end? }
+    let hasOpenPauseInPauses = false;
     if (ticket.pauses && typeof ticket.pauses === 'object') {
       for (const key of Object.keys(ticket.pauses)) {
         const p = ticket.pauses[key];
         if (!p) continue;
         const ps = parseTimestamp(p.start);
         if (!ps) continue;
+        if (!p.end) hasOpenPauseInPauses = true;
         const pe = parseTimestamp(p.end) || now; // si no ha terminado la pausa, cuenta hasta ahora
         if (pe <= ps) continue;
         // Solo considerar pausas que inician después de la creación (superposición)
@@ -89,6 +91,21 @@ export const calculateSlaRemaining = (ticket, slaConfig = {}, slaSubcatsConfig =
         }
       }
       if (elapsedMs < 0) elapsedMs = 0; // evitar negativo tras restar pausas
+    }
+
+    // Fallback para tickets legacy/inconsistentes: pausa activa en campos planos
+    // (isPaused + pauseStart) sin una pausa abierta en ticket.pauses.
+    if (ticket.isPaused && !hasOpenPauseInPauses) {
+      const pauseStartMs = parseTimestamp(ticket.pauseStart);
+      if (pauseStartMs && now > pauseStartMs) {
+        const overlapStart = Math.max(pauseStartMs, createdMs);
+        const overlapEnd = now;
+        if (overlapEnd > overlapStart) {
+          const pausedMs = workingMsBetween(overlapStart, overlapEnd, bhOpts);
+          if (pausedMs > 0) elapsedMs -= pausedMs;
+          if (elapsedMs < 0) elapsedMs = 0;
+        }
+      }
     }
 
     const elapsedHours = elapsedMs / (1000 * 60 * 60);
